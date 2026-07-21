@@ -46,7 +46,7 @@
       }
 
       header {
-        max-width: 1200px;
+        max-width: 1600px;
         margin: 0 auto 3rem;
         display: flex;
         justify-content: space-between;
@@ -94,14 +94,15 @@
       }
 
       main {
-        max-width: 1200px;
+        max-width: 1600px;
         margin: 0 auto;
       }
 
       .board {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
         gap: 2rem;
+        align-items: start;
       }
 
       .column {
@@ -142,6 +143,10 @@
         box-shadow: var(--shadow);
         cursor: pointer;
         transition: transform 0.2s;
+        min-width: 0;
+      }
+      .card.dragging {
+        opacity: 0.4;
       }
       .card.conflict {
         border-color: #ef4444;
@@ -149,6 +154,13 @@
       }
       .card.conflict .card-epic {
         color: #ef4444;
+      }
+      .card-project,
+      .card-epic,
+      .card-title {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
       .card-title {
         font-size: 0.9rem;
@@ -201,8 +213,52 @@
       }
 
       /* Filter */
+      #filter-header-row {
+        max-width: 1600px;
+        margin: 0 auto 1rem;
+      }
+      #filter-header {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        cursor: pointer;
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        padding: 0.5rem 1rem;
+        border-radius: var(--radius);
+        border: 1px solid var(--border);
+        background: var(--bg-card);
+        color: var(--text-main);
+        transition: all 0.2s;
+      }
+      #filter-header:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow);
+      }
+      #filter-chevron {
+        display: inline-block;
+        font-size: 0.6rem;
+        transition: transform 0.2s;
+      }
+      #filter-header.collapsed #filter-chevron {
+        transform: rotate(-90deg);
+      }
+      #filter-clear {
+        cursor: pointer;
+        opacity: 0.6;
+        font-weight: 700;
+      }
+      #filter-clear:hover {
+        opacity: 1;
+        color: var(--accent);
+      }
+      #filter-region.collapsed {
+        display: none;
+      }
       .filter-container {
-        max-width: 1200px;
+        max-width: 1600px;
         margin: 0 auto 2rem;
         display: flex;
         gap: 0.5rem;
@@ -328,6 +384,13 @@
         opacity: 1;
         border-bottom-color: var(--accent);
       }
+      #modal-parse-error {
+        padding: 0.75rem 1.5rem;
+        font-size: 0.75rem;
+        background: rgba(239, 68, 68, 0.1);
+        color: #ef4444;
+        border-bottom: 1px solid var(--border);
+      }
       .editor-area {
         flex: 1;
         display: flex;
@@ -395,52 +458,36 @@
       </div>
     </header>
 
-    <div
-      id="epic-filters"
-      class="filter-container"
-      style="margin-bottom: 0.5rem"
-    ></div>
-    <div id="tag-filters" class="filter-container"></div>
+    <div id="filter-header-row">
+      <div id="filter-header" onclick="toggleFilters()">
+        <span id="filter-chevron">▾</span>
+        <span id="filter-summary">filters</span>
+        <span id="filter-clear" onclick="event.stopPropagation(); clearFilters()">×</span>
+      </div>
+    </div>
+    <div id="filter-region">
+      <div
+        id="project-filters"
+        class="filter-container"
+        style="margin-bottom: 0.5rem"
+      ></div>
+      <div
+        id="epic-filters"
+        class="filter-container"
+        style="margin-bottom: 0.5rem"
+      ></div>
+      <div id="tag-filters" class="filter-container"></div>
+    </div>
 
     <main>
-      <div id="kanban-view" class="board">
-        <div class="column" id="col-TODO">
-          <div class="column-header">TODO</div>
-          <div
-            class="card-list"
-            id="list-TODO"
-            ondragover="handleDragOver(event)"
-            ondragleave="handleDragLeave(event)"
-            ondrop="handleDrop(event, 'TODO')"
-          ></div>
-        </div>
-        <div class="column" id="col-IN-PROGRESS">
-          <div class="column-header">IN PROGRESS</div>
-          <div
-            class="card-list"
-            id="list-IN-PROGRESS"
-            ondragover="handleDragOver(event)"
-            ondragleave="handleDragLeave(event)"
-            ondrop="handleDrop(event, 'IN PROGRESS')"
-          ></div>
-        </div>
-        <div class="column" id="col-DONE">
-          <div class="column-header">DONE</div>
-          <div
-            class="card-list"
-            id="list-DONE"
-            ondragover="handleDragOver(event)"
-            ondragleave="handleDragLeave(event)"
-            ondrop="handleDrop(event, 'DONE')"
-          ></div>
-        </div>
-      </div>
+      <div id="kanban-view" class="board"></div>
 
       <div id="table-view" class="hidden">
         <table class="table-view">
           <thead>
             <tr>
               <th>File</th>
+              <th>Project</th>
               <th>Epic</th>
               <th>Status</th>
               <th>Tags</th>
@@ -455,6 +502,7 @@
       <div class="modal-overlay" onclick="closeModal()">
         <div class="modal" onclick="event.stopPropagation()">
           <div class="modal-header">
+            <div id="modal-project" class="card-project" style="margin: 0"></div>
             <div id="modal-epic" class="card-epic" style="margin: 0"></div>
             <div style="display: flex; gap: 0.5rem; align-items: center">
               <span
@@ -477,6 +525,7 @@
               PREVIEW
             </div>
           </div>
+          <div id="modal-parse-error" class="hidden"></div>
           <div class="modal-content">
             <div id="editor-pane" class="editor-area">
               <textarea
@@ -506,11 +555,13 @@
     <script>
       let state = {
         tasks: [],
+        columns: [],
         view: "kanban",
         activeTask: null,
         activeTab: "preview",
         saveTimeout: null,
         activeTags: new Set(),
+        activeProjects: new Set(),
         activeEpics: new Set(),
       };
 
@@ -530,109 +581,261 @@
         }
       };
 
-      const renderKanban = () => {
-        const statuses = ["TODO", "IN PROGRESS", "DONE", "CONFLICT"];
-        const container = document.getElementById("kanban-view");
+      const byOrder = (a, b) => {
+        const ao = a.order ?? Infinity;
+        const bo = b.order ?? Infinity;
+        if (ao !== bo) return ao - bo;
+        return a.file.localeCompare(b.file);
+      };
 
-        statuses.forEach((status) => {
-          const listId = `list-${status.replace(" ", "-")}`;
-          let list = document.getElementById(listId);
-          if (!list) {
-            if (status === "CONFLICT") {
-              const conflictTasks = state.tasks.filter(
-                (t) => t.status === "CONFLICT",
-              );
-              if (conflictTasks.length > 0) {
-                const col = document.createElement("div");
-                col.className = "column";
-                col.id = "col-CONFLICT";
-                col.innerHTML = `<div class="column-header">CONFLICT</div><div class="card-list" id="${listId}" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event, '${status}')"></div>`;
-                container.appendChild(col);
-                list = document.getElementById(listId);
-              } else return;
-            } else {
-              const col = document.getElementById(
-                `col-${status.replace(" ", "-")}`,
-              );
-              if (col) {
-                list = col.querySelector(".card-list");
-                if (list) {
-                  list.setAttribute("ondragover", "handleDragOver(event)");
-                  list.setAttribute("ondragleave", "handleDragLeave(event)");
-                  list.setAttribute("ondrop", `handleDrop(event, '${status}')`);
-                }
-              }
-              if (!list) return;
-            }
-          }
-          const tasks = state.tasks.filter((t) => {
-            const statusMatch = t.status === status;
-            if (!statusMatch) return false;
-            return isTaskVisible(t);
+      const escapeHtml = (s) =>
+        String(s ?? "").replace(
+          /[&<>"']/g,
+          (c) =>
+            ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c],
+        );
+
+      const renderCard = (t) => `
+        <div class="card ${t.status === "CONFLICT" ? "conflict" : ""}"
+             data-file="${escapeHtml(t.file)}"
+             draggable="${t.status !== "CONFLICT"}">
+            ${t.project ? `<div class="card-project">${escapeHtml(t.project)}</div>` : ""}
+            <div class="card-epic">${t.status === "CONFLICT" ? "!!! GIT CONFLICT" : t.parseError ? "!!! PARSE ERROR" : t.epic ? escapeHtml(t.epic) : "NO EPIC"}</div>
+            <div class="card-title">${escapeHtml(t.title)}</div>
+            <div class="card-tags">
+                ${(t.tags || []).map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("")}
+            </div>
+        </div>
+      `;
+
+      const renderColumn = (section) => {
+        const tasks = [...section.tasks].sort(byOrder);
+        return `
+          <div class="column" data-status="${escapeHtml(section.name)}">
+            <div class="column-header">${escapeHtml(section.name)}</div>
+            <div class="card-list" data-droppable="${section.droppable}">
+              ${tasks.map(renderCard).join("")}
+            </div>
+          </div>
+        `;
+      };
+
+      const renderKanban = () => {
+        const container = document.getElementById("kanban-view");
+        const conflicts = state.tasks.filter((t) => t.status === "CONFLICT");
+        const known = new Set(state.columns);
+        const others = state.tasks.filter(
+          (t) => t.status !== "CONFLICT" && !known.has(t.status),
+        );
+
+        const sections = [];
+        if (conflicts.length)
+          sections.push({ name: "CONFLICT", tasks: conflicts.filter(isTaskVisible), droppable: false });
+        for (const col of state.columns) {
+          sections.push({
+            name: col,
+            tasks: state.tasks.filter((t) => t.status === col).filter(isTaskVisible),
+            droppable: true,
           });
-          list.innerHTML = tasks
-            .map(
-              (t) => `
-                    <div class="card ${t.status === "CONFLICT" ? "conflict" : ""}" 
-                         onclick="openCard('${t.file}')" 
-                         draggable="true" 
-                         ondragstart="handleDragStart(event, '${t.file}')">
-                        <div class="card-epic">${t.status === "CONFLICT" ? "!!! GIT CONFLICT" : t.epic || "NO EPIC"}</div>
-                        <div class="card-title">${t.title}</div>
-                        <div class="card-tags">
-                            ${(t.tags || []).map((tag) => `<span class="tag">${tag}</span>`).join("")}
-                        </div>
-                    </div>
-                `,
-            )
-            .join("");
+        }
+        if (others.length)
+          sections.push({ name: "OTHER", tasks: others.filter(isTaskVisible), droppable: false });
+
+        container.innerHTML = sections.map(renderColumn).join("");
+        attachCardListeners(container);
+      };
+
+      const attachCardListeners = (container) => {
+        container.querySelectorAll(".card").forEach((card) => {
+          card.addEventListener("click", () => openCard(card.dataset.file));
+          card.addEventListener("dragstart", (e) =>
+            handleDragStart(e, card.dataset.file),
+          );
+          card.addEventListener("dragend", (e) => {
+            e.target.classList.remove("dragging");
+            // If the drag was cancelled (dropped outside a valid target, or
+            // Escaped) rather than completed with a write, the live preview
+            // move from handleDragOver never gets corrected by a real
+            // re-render — snap the board back to the last known-good state.
+            if (!dragCompleted) renderKanban();
+            draggedFile = null;
+            dragCompleted = false;
+          });
+        });
+        container.querySelectorAll(".card-list").forEach((list) => {
+          if (list.dataset.droppable !== "true") return;
+          list.addEventListener("dragover", (e) => handleDragOver(e));
+          list.addEventListener("dragleave", (e) => handleDragLeave(e));
+          list.addEventListener("drop", (e) =>
+            handleDrop(e, list.closest(".column").dataset.status),
+          );
         });
       };
 
       const isTaskVisible = (t) => {
+        const projectMatch =
+          state.activeProjects.size === 0 ||
+          (t.project && state.activeProjects.has(t.project));
         const epicMatch =
           state.activeEpics.size === 0 ||
           state.activeEpics.has(t.epic || "NO EPIC");
         const tagMatch =
           state.activeTags.size === 0 ||
           (t.tags || []).some((tag) => state.activeTags.has(tag));
-        return epicMatch && tagMatch;
+        return projectMatch && epicMatch && tagMatch;
       };
 
       let draggedFile = null;
+      let dragCompleted = false;
 
       const handleDragStart = (e, file) => {
+        const task = state.tasks.find((t) => t.file === file);
+        if (!task || task.status === "CONFLICT") {
+          e.preventDefault();
+          return;
+        }
         draggedFile = file;
+        dragCompleted = false;
         e.dataTransfer.effectAllowed = "move";
+        e.target.classList.add("dragging");
+      };
+
+      // FLIP-animates every other card in `list` as `mutate` changes DOM
+      // order, so the cards visibly slide out of the way instead of jumping.
+      // The dragging card itself is skipped — it's already tracking the
+      // cursor via the browser's native drag image.
+      const animateReorder = (list, mutate) => {
+        const firstRects = new Map(
+          [...list.querySelectorAll(".card")].map((c) => [c, c.getBoundingClientRect()]),
+        );
+
+        mutate();
+
+        list.querySelectorAll(".card").forEach((c) => {
+          if (c.classList.contains("dragging")) return;
+          const first = firstRects.get(c);
+          if (!first) return; // just entered this list; nothing to animate from
+          const last = c.getBoundingClientRect();
+          const dx = first.left - last.left;
+          const dy = first.top - last.top;
+          if (!dx && !dy) return;
+          c.style.transition = "none";
+          c.style.transform = `translate(${dx}px, ${dy}px)`;
+          c.getBoundingClientRect(); // force reflow so the transform above applies immediately
+          c.style.transition = "";
+          c.style.transform = "";
+        });
       };
 
       const handleDragOver = (e) => {
         e.preventDefault();
         e.currentTarget.classList.add("drag-over");
+
+        const list = e.currentTarget;
+        const dragging = document.querySelector(".card.dragging");
+        if (!dragging) return;
+
+        const afterEl = getDragAfterElement(list, e.clientY);
+        const inPlace =
+          dragging.parentElement === list && dragging.nextElementSibling === afterEl;
+        if (inPlace) return;
+
+        animateReorder(list, () => {
+          if (afterEl) list.insertBefore(dragging, afterEl);
+          else list.appendChild(dragging);
+        });
       };
 
       const handleDragLeave = (e) => {
         e.currentTarget.classList.remove("drag-over");
       };
 
+      // Returns the card element the cursor is currently above, or null if past the last card.
+      const getDragAfterElement = (list, y) => {
+        const cards = [...list.querySelectorAll(".card:not(.dragging)")];
+        return (
+          cards.find((card) => {
+            const box = card.getBoundingClientRect();
+            return y < box.top + box.height / 2;
+          }) ?? null
+        );
+      };
+
+      // prev / next are the `order` values of the rendered neighbours, or undefined.
+      const computeOrder = (prev, next) => {
+        if (prev !== undefined && next !== undefined) return (prev + next) / 2;
+        if (prev !== undefined) return prev + 1;
+        if (next !== undefined) return next - 1;
+        return 1;
+      };
+
       const handleDrop = async (e, newStatus) => {
         e.preventDefault();
         e.currentTarget.classList.remove("drag-over");
         if (!draggedFile) return;
+        const file = draggedFile;
+        draggedFile = null;
 
+        // Resolve neighbours against the full, unfiltered column — not just
+        // the cards currently rendered — so an active filter can't hide a
+        // neighbour and cause the new order to interpolate against the
+        // wrong pair (F4).
+        const fullList = state.tasks
+          .filter((t) => t.status === newStatus && t.file !== file)
+          .sort(byOrder);
+
+        const afterEl = getDragAfterElement(e.currentTarget, e.clientY);
+
+        let prevOrder, nextOrder;
+        if (afterEl) {
+          const nextIndex = fullList.findIndex((t) => t.file === afterEl.dataset.file);
+          nextOrder = fullList[nextIndex]?.order;
+          prevOrder = nextIndex > 0 ? fullList[nextIndex - 1].order : undefined;
+        } else {
+          const visibleCards = [
+            ...e.currentTarget.querySelectorAll(".card:not(.dragging)"),
+          ];
+          const lastVisible = visibleCards[visibleCards.length - 1];
+          if (lastVisible) {
+            const prevIndex = fullList.findIndex((t) => t.file === lastVisible.dataset.file);
+            prevOrder = fullList[prevIndex]?.order;
+            nextOrder = prevIndex >= 0 ? fullList[prevIndex + 1]?.order : undefined;
+          }
+        }
+        const newOrder = computeOrder(prevOrder, nextOrder);
+
+        // Best-effort no-op guard (F7): if the recomputed status/order match
+        // the card's current values exactly, skip the write. This only
+        // fires when the card's stored `order` already equals the midpoint
+        // of its neighbours — e.g. a card at 2.9 between 1 and 3 recomputes
+        // to 2 and still writes even though it visually didn't move. Not a
+        // correctness issue (the write is idempotent), just an occasional
+        // extra file touch this doesn't catch.
+        const current = state.tasks.find((t) => t.file === file);
+        if (current && current.status === newStatus && current.order === newOrder) {
+          return;
+        }
+
+        dragCompleted = true;
         try {
-          await fetch("/api/update", {
+          const res = await fetch("/api/update", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              file: draggedFile,
+              file,
               status: newStatus,
+              order: newOrder,
             }),
           });
+          if (!res.ok) {
+            const msg = await res.text().catch(() => "");
+            throw new Error(msg || `Move failed (${res.status})`);
+          }
         } catch (err) {
           console.error(err);
+          showStatus(`error: ${err.message}`);
+          renderKanban();
         }
-        draggedFile = null;
       };
 
       const openCard = (file) => {
@@ -640,8 +843,26 @@
         if (!task) return;
         state.activeTask = task;
 
+        const modalProject = document.getElementById("modal-project");
+        modalProject.innerText = task.project || "";
+        modalProject.style.display = task.project ? "" : "none";
         document.getElementById("modal-epic").innerText =
           task.epic || "NO EPIC";
+
+        const parseErrorBanner = document.getElementById("modal-parse-error");
+        const editor = document.getElementById("markdown-editor");
+        const tagInput = document.getElementById("tag-add-input");
+        if (task.parseError) {
+          parseErrorBanner.textContent = `PARSE ERROR: ${task.parseError} — fix this file's YAML frontmatter directly (outside MK), then reopen this card. Editing and tags are disabled here until the frontmatter parses.`;
+          parseErrorBanner.classList.remove("hidden");
+          editor.readOnly = true;
+          tagInput.disabled = true;
+        } else {
+          parseErrorBanner.classList.add("hidden");
+          editor.readOnly = false;
+          tagInput.disabled = false;
+        }
+
         document.getElementById("markdown-editor").value = task.content || "";
         document.getElementById("modal-body").innerHTML = renderMarkdown(
           task.content,
@@ -659,16 +880,19 @@
           .map(
             (tag) => `
                 <span class="tag">
-                    ${tag}
-                    <span class="tag-remove" onclick="removeTag('${tag}')">×</span>
+                    ${escapeHtml(tag)}
+                    <span class="tag-remove" data-tag="${escapeHtml(tag)}">×</span>
                 </span>
             `,
           )
           .join("");
+        list.querySelectorAll(".tag-remove").forEach((el) => {
+          el.addEventListener("click", () => removeTag(el.dataset.tag));
+        });
       };
 
       const addTag = (tag) => {
-        if (!tag || !state.activeTask) return;
+        if (!tag || !state.activeTask || state.activeTask.parseError) return;
         tag = tag.trim().toLowerCase();
         if (!state.activeTask.tags) state.activeTask.tags = [];
         if (!state.activeTask.tags.includes(tag)) {
@@ -680,7 +904,7 @@
       };
 
       const removeTag = (tag) => {
-        if (!state.activeTask || !state.activeTask.tags) return;
+        if (!state.activeTask || !state.activeTask.tags || state.activeTask.parseError) return;
         state.activeTask.tags = state.activeTask.tags.filter((t) => t !== tag);
         renderModalTags();
         saveChanges();
@@ -721,7 +945,7 @@
 
         showSaveStatus("saving...");
         try {
-          await fetch("/api/update", {
+          const res = await fetch("/api/update", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -730,6 +954,10 @@
               tags: state.activeTask.tags,
             }),
           });
+          if (!res.ok) {
+            const msg = await res.text().catch(() => "");
+            throw new Error(msg || `Save failed (${res.status})`);
+          }
           showSaveStatus("saved");
           setTimeout(() => {
             if (document.getElementById("save-indicator").innerText === "saved")
@@ -801,33 +1029,69 @@
         );
       };
 
+      const byStatusThenOrder = (a, b) => {
+        const as = a.status || "";
+        const bs = b.status || "";
+        if (as !== bs) return as.localeCompare(bs);
+        return byOrder(a, b);
+      };
+
       const renderTable = () => {
         const body = document.getElementById("table-body");
-        const tasks = state.tasks.filter(isTaskVisible);
+        const tasks = state.tasks.filter(isTaskVisible).sort(byStatusThenOrder);
         body.innerHTML = tasks
           .map(
             (t) => `
-                <tr onclick="openCard('${t.file}')" style="cursor:pointer">
-                    <td>${t.file}</td>
-                    <td>${t.epic || "-"}</td>
-                    <td>${t.status}</td>
-                    <td>${(t.tags || []).join(", ")}</td>
+                <tr data-file="${escapeHtml(t.file)}" style="cursor:pointer">
+                    <td>${escapeHtml(t.file)}</td>
+                    <td>${t.project ? escapeHtml(t.project) : "-"}</td>
+                    <td>${t.epic ? escapeHtml(t.epic) : "-"}</td>
+                    <td>${escapeHtml(t.status)}</td>
+                    <td>${escapeHtml((t.tags || []).join(", "))}</td>
                 </tr>
             `,
           )
           .join("");
+        body.querySelectorAll("tr").forEach((row) => {
+          row.addEventListener("click", () => openCard(row.dataset.file));
+        });
       };
 
       const renderFilters = () => {
+        const n =
+          state.activeProjects.size + state.activeEpics.size + state.activeTags.size;
+        document.getElementById("filter-summary").innerText =
+          n === 0 ? "filters" : `filters (${n})`;
+        document.getElementById("filter-clear").style.display =
+          n === 0 ? "none" : "";
+
+        const projectContainer = document.getElementById("project-filters");
         const epicContainer = document.getElementById("epic-filters");
         const tagContainer = document.getElementById("tag-filters");
+        const allProjects = new Set();
         const allEpics = new Set();
         const allTags = new Set();
 
         state.tasks.forEach((t) => {
+          if (t.project) allProjects.add(t.project);
           allEpics.add(t.epic || "NO EPIC");
           (t.tags || []).forEach((tag) => allTags.add(tag));
         });
+
+        projectContainer.innerHTML =
+          allProjects.size > 0
+            ? '<span class="filter-label">PROJECTS:</span>' +
+              Array.from(allProjects)
+                .sort()
+                .map(
+                  (project) => `
+                    <div class="filter-chip ${state.activeProjects.has(project) ? "active" : ""}" onclick="toggleProjectFilter('${project}')">
+                        ${project}
+                    </div>
+                `,
+                )
+                .join("")
+            : "";
 
         epicContainer.innerHTML =
           allEpics.size > 0
@@ -860,6 +1124,12 @@
             : "";
       };
 
+      const toggleProjectFilter = (project) => {
+        if (state.activeProjects.has(project)) state.activeProjects.delete(project);
+        else state.activeProjects.add(project);
+        render();
+      };
+
       const toggleEpicFilter = (epic) => {
         if (state.activeEpics.has(epic)) state.activeEpics.delete(epic);
         else state.activeEpics.add(epic);
@@ -871,6 +1141,25 @@
         else state.activeTags.add(tag);
         render();
       };
+
+      const toggleFilters = () => {
+        const region = document.getElementById("filter-region");
+        const collapsed = region.classList.toggle("collapsed");
+        document.getElementById("filter-header").classList.toggle("collapsed", collapsed);
+        localStorage.setItem("mk.filters.collapsed", collapsed ? "1" : "0");
+      };
+
+      const clearFilters = () => {
+        state.activeProjects.clear();
+        state.activeEpics.clear();
+        state.activeTags.clear();
+        render();
+      };
+
+      if (localStorage.getItem("mk.filters.collapsed") === "1") {
+        document.getElementById("filter-region").classList.add("collapsed");
+        document.getElementById("filter-header").classList.add("collapsed");
+      }
 
       const toggleView = () => {
         state.view = state.view === "kanban" ? "table" : "kanban";
@@ -885,7 +1174,8 @@
         try {
           const res = await fetch("/api/board");
           const data = await res.json();
-          state.tasks = data;
+          state.tasks = data.tasks || [];
+          state.columns = data.columns || [];
           render();
           showStatus("synced");
         } catch (err) {
@@ -900,6 +1190,9 @@
 
         if (msg === "error") {
           status.innerText = "SERVER DISCONNECTED";
+          status.classList.add("error");
+        } else if (msg.startsWith("error:")) {
+          status.innerText = msg.slice("error:".length).trim();
           status.classList.add("error");
         } else {
           status.innerText = msg;

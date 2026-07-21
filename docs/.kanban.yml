@@ -1,0 +1,7 @@
+# MK board columns. Order here is the order on the board.
+# A card whose `status` matches none of these lands in OTHER.
+columns:
+  - TODO
+  - IN PROGRESS
+  - UNDER REVIEW
+  - DONE

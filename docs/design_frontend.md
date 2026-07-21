@@ -1,29 +1,15 @@
 ---
 epic: UI
-status: IN PROGRESS
+order: 2
+project: MK
+status: DONE
 tags:
-    - frontend
-    - css
-    - vanilla
-    - choco
+  - frontend
+  - css
+  - vanilla
+  - choco
 ---
+
 # Design Frontend
-
-Create the Kanban board UI with Vanilla CSS.
-
-Create the Kanban board UI with Vanilla CSS.
-Create the Kanban board UI with Vanilla CSS.Create the Kanban board UI with Vanilla CSS.Create the Kanban board UI with Vanilla CSS.Create the Kanban board UI with Vanilla CSS.
-Create the Kanban board UI with Vanilla CSS.
-Create the Kanban board UI with Vanilla CSS.
-
-Create the Kanban board UI with Vanilla CSS.
-Create the Kanban board UI with Vanilla CSS.
-
-
-Create the Kanban board UI with Vanilla CSS.
-Create the Kanban board UI with Vanilla CSS.
-Create the Kanban board UI with Vanilla CSS.
-
-
 
 Create the Kanban board UI with Vanilla CSS.

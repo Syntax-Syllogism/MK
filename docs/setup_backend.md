@@ -1,6 +1,8 @@
 ---
 epic: SETUP
-status: DONE
+order: 1
+project: MK
+status: IN PROGRESS
 tags:
     - backend
     - go
