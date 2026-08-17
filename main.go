@@ -81,6 +81,11 @@ func main() {
 
 	docsDir := *dirFlag
 
+	absDocsDir, err := filepath.Abs(docsDir)
+	if err != nil {
+		log.Fatalf("Could not resolve absolute path for %s: %v", docsDir, err)
+	}
+
 	// Ensure directories exist
 	if _, err := os.Stat(docsDir); os.IsNotExist(err) {
 		os.MkdirAll(docsDir, 0755)
@@ -166,7 +171,7 @@ func main() {
 
 	// HTTP Server
 	http.HandleFunc("/api/board", func(w http.ResponseWriter, r *http.Request) {
-		getBoard(w, r)
+		getBoard(w, r, absDocsDir)
 	})
 	http.HandleFunc("/api/update", func(w http.ResponseWriter, r *http.Request) {
 		updateTask(w, r, docsDir)
@@ -461,7 +466,7 @@ func parseTask(path string) (Task, error) {
 	return task, nil
 }
 
-func getBoard(w http.ResponseWriter, r *http.Request) {
+func getBoard(w http.ResponseWriter, r *http.Request, docsDir string) {
 	board.mu.RLock()
 	tasks := board.Tasks
 	board.mu.RUnlock()
@@ -474,7 +479,8 @@ func getBoard(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(struct {
 		Columns []string `json:"columns"`
 		Tasks   []Task   `json:"tasks"`
-	}{Columns: columns, Tasks: tasks})
+		DocsDir string   `json:"docsDir"`
+	}{Columns: columns, Tasks: tasks, DocsDir: docsDir})
 }
 
 // bootstrapIfAbsent writes docs/.kanban.yml from the current task set (via

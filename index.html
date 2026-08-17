@@ -510,6 +510,9 @@
                 class="status"
                 style="margin-right: 1rem"
               ></span>
+              <button id="copy-path-btn" class="btn" onclick="copyFilePath()">
+                copy path to file
+              </button>
               <button class="btn" onclick="closeModal()">close()</button>
             </div>
           </div>
@@ -556,6 +559,7 @@
       let state = {
         tasks: [],
         columns: [],
+        docsDir: "",
         view: "kanban",
         activeTask: null,
         activeTab: "preview",
@@ -873,6 +877,27 @@
         document.getElementById("modal-container").classList.remove("hidden");
       };
 
+      const copyFilePath = async () => {
+        if (!state.activeTask) return;
+        const fullPath = state.docsDir
+          ? `${state.docsDir}/${state.activeTask.file}`
+          : state.activeTask.file;
+
+        try {
+          await navigator.clipboard.writeText(fullPath);
+        } catch (err) {
+          console.error("Copy failed:", err);
+          return;
+        }
+
+        const btn = document.getElementById("copy-path-btn");
+        const original = btn.textContent;
+        btn.textContent = "copied!";
+        setTimeout(() => {
+          btn.textContent = original;
+        }, 1200);
+      };
+
       const renderModalTags = () => {
         const list = document.getElementById("modal-tags-list");
         const tags = state.activeTask.tags || [];
@@ -1176,6 +1201,7 @@
           const data = await res.json();
           state.tasks = data.tasks || [];
           state.columns = data.columns || [];
+          state.docsDir = data.docsDir || "";
           render();
           showStatus("synced");
         } catch (err) {
