@@ -5,7 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0/).
 
-## [Unreleased]
+## [0.3.1] - 2026-08-17
+
+### Changed
+
+- Internal maintenance and tooling updates
+
+## [0.3.0] - 2026-08-17
 
 ### Added
 
@@ -27,12 +33,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   column instead of disappearing. If you upgrade with statuses outside the old
   `TODO / IN PROGRESS / DONE` set, add them to `docs/.kanban.yml` to give them a real
   column. See [USER_GUIDE.md](USER_GUIDE.md) for day-to-day usage of all of the above.
-
-## [0.3.0] - 2026-08-17
-
-### Added
-
-- Copy path to file button
 
 ## [0.2.0] - 2026-07-21
 
