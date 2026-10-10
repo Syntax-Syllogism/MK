@@ -1,0 +1,40 @@
+MK // /tasks                                                                                                                            table  filters (0)  test
+PROJECTS: [MK]
+EPICS: [CORE] [NO EPIC] [QA] [SETUP] [UI]
+TAGS: [analytics] [backend] [choco] [copy] [css] [design] [docs] [frontend] [go] [incident] [marketing] [mobile] [postmortem] [process] [qa] [smoke-test] [ui]
+[vanilla]
+FILE                                                                                                  PROJECT EPIC  STATUS       TAGS                       DEPS
+resolve_merge_conflict_in_onboarding.md                                                               -       -     CONFLICT     -                          0
+test_frontend.md                                                                                      MK      UI    TODO         frontend,css,vanilla,choco 0
+read_prd.md                                                                                           MK      CORE  TODO         docs                       0
+wire_up_analytics_events.md                                                                           MK      QA    TODO         analytics,backend          0
+polish_mobile_nav_transitions.md                                                                      MK      QA    TODO         design,mobile              0
+setup_backend.md                                                                                      MK      SETUP IN PROGRESS  backend,go                 0
+writeup_deploy_incident_postmortem.md                                                                 MK      QA    UNDER REVIEW incident,postmortem        0
+draft_pricing_page_copy.md                                                                            MK      QA    UNDER REVIEW marketing,copy             0
+design_frontend.md                                                                                    MK      UI    DONE         frontend,css,vanilla,choco 0
+design_empty_state_illustration.md                                                                    MK      QA    DONE         design,ui                  0
+document_smoke_test_plan.md                                                                           MK      QA    DONE         qa,smoke-test,docs         0
+verify_status_after_board_rename.md                                                                   MK      QA    REVIEW       process                    0
+capture_customer_feedback_notes.md                                                                    -       -     -            -                          0
+draft_changelog_for_v2_release.md                                                                     -       -     -            -                          0
+migrate_legacy_priority_field.md                                                                      -       -     -            -                          0
+spike_notification_service.md                                                                         -       -     -            -                          0
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+j/k ↓/↑ card / row / scroll • g/G first / last • ctrl+d/u half page • ? help

@@ -8,7 +8,7 @@ before:
 
 builds:
   - id: mk
-    main: ./main.go
+    main: .
     binary: mk
     env:
       - CGO_ENABLED=0

@@ -2,6 +2,9 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"encoding/json"
+	"github.com/Syntax-Syllogism/mk/internal/board"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -11,36 +14,9 @@ import (
 	"time"
 )
 
-func TestTaskPathAcceptsFlatFilenames(t *testing.T) {
-	path, err := taskPath("docs", "notes..draft.md")
-	if err != nil {
-		t.Fatalf("taskPath returned error: %v", err)
-	}
-
-	want := filepath.Join("docs", "notes..draft.md")
-	if path != want {
-		t.Fatalf("taskPath() = %q, want %q", path, want)
-	}
-}
-
-func TestTaskPathRejectsMissingFile(t *testing.T) {
-	if _, err := taskPath("docs", ""); err == nil {
-		t.Fatal("taskPath accepted empty file")
-	}
-}
-
 func TestBroadcastDoesNotBlockOnSlowSSEClient(t *testing.T) {
-	clientsMu.Lock()
-	originalClients := clients
-	clients = make(map[chan string]bool)
 	slowClient := make(chan string, 1)
-	clients[slowClient] = true
-	clientsMu.Unlock()
-	t.Cleanup(func() {
-		clientsMu.Lock()
-		clients = originalClients
-		clientsMu.Unlock()
-	})
+	srv := &server{clients: map[chan string]bool{slowClient: true}}
 
 	// Fill the client's one-message queue to reproduce a browser that has
 	// not yet consumed its previous SSE update. The watcher must be able to
@@ -48,7 +24,7 @@ func TestBroadcastDoesNotBlockOnSlowSSEClient(t *testing.T) {
 	slowClient <- "update"
 	done := make(chan struct{})
 	go func() {
-		broadcast("update")
+		srv.broadcast("update")
 		close(done)
 	}()
 
@@ -68,30 +44,6 @@ func TestBroadcastDoesNotBlockOnSlowSSEClient(t *testing.T) {
 	}
 }
 
-func TestTaskPathRejectsNestedAndTraversalPaths(t *testing.T) {
-	tests := []string{
-		"../main.go",
-		"foo/../bar.md",
-		"subdir/card.md",
-		filepath.Join("subdir", "card.md"),
-		filepath.Join("..", "main.go"),
-	}
-
-	for _, file := range tests {
-		t.Run(file, func(t *testing.T) {
-			if _, err := taskPath("docs", file); err == nil {
-				t.Fatalf("taskPath accepted %q", file)
-			}
-		})
-	}
-}
-
-func TestTaskPathRejectsAbsolutePaths(t *testing.T) {
-	if _, err := taskPath("docs", filepath.Join(string(filepath.Separator), "tmp", "card.md")); err == nil {
-		t.Fatal("taskPath accepted absolute path")
-	}
-}
-
 func writeTaskFile(t *testing.T, dir, name, content string) {
 	t.Helper()
 	if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0644); err != nil {
@@ -99,75 +51,11 @@ func writeTaskFile(t *testing.T, dir, name, content string) {
 	}
 }
 
-func TestLoadConfigBootstrapsFromDiscoveredStatuses(t *testing.T) {
-	dir := t.TempDir()
-	// Filename order: a_todo.md, b_progress.md, c_done.md, d_dup.md
-	writeTaskFile(t, dir, "a_todo.md", "---\nstatus: TODO\n---\nbody")
-	writeTaskFile(t, dir, "b_progress.md", "---\nstatus: IN PROGRESS\n---\nbody")
-	writeTaskFile(t, dir, "c_done.md", "---\nstatus: DONE\n---\nbody")
-	writeTaskFile(t, dir, "d_dup.md", "---\nstatus: TODO\n---\nbody")
-	writeTaskFile(t, dir, "e_none.md", "no frontmatter here")
-
-	if err := scanDocs(dir, filepath.Join(t.TempDir(), "board.json")); err != nil {
-		t.Fatalf("scanDocs error: %v", err)
-	}
-	if err := bootstrapIfAbsent(dir); err != nil {
-		t.Fatalf("bootstrapIfAbsent error: %v", err)
-	}
-	if err := loadConfig(dir); err != nil {
-		t.Fatalf("loadConfig error: %v", err)
-	}
-
-	want := []string{"TODO", "IN PROGRESS", "DONE"}
-	configMu.RLock()
-	got := config.Columns
-	configMu.RUnlock()
-	if !equalStrings(got, want) {
-		t.Fatalf("config.Columns = %v, want %v", got, want)
-	}
-
-	if _, err := os.Stat(filepath.Join(dir, configFileName)); err != nil {
-		t.Fatalf("expected %s to be written: %v", configFileName, err)
-	}
-}
-
-func TestParseTaskSurvivesMalformedFrontmatter(t *testing.T) {
-	dir := t.TempDir()
-	// order: expects a float; tags: expects a list. Either is a type
-	// mismatch yaml.Unmarshal will reject.
-	writeTaskFile(t, dir, "bad.md", "---\nstatus: TODO\norder: soon\n---\nbody")
-
-	task, err := parseTask(filepath.Join(dir, "bad.md"))
-	if err != nil {
-		t.Fatalf("parseTask returned an error; malformed frontmatter must not drop the task: %v", err)
-	}
-	if task.Status != "" {
-		t.Fatalf("Status = %q, want empty so the task routes to OTHER", task.Status)
-	}
-	if task.Epic != "" {
-		t.Fatalf("Epic = %q, want empty (F20: PARSE ERROR must not leak into the epic filter)", task.Epic)
-	}
-	if task.ParseError == "" {
-		t.Fatal("ParseError = \"\", want the underlying YAML error")
-	}
-	if task.Content != "body" {
-		t.Fatalf("Content = %q, want the real file body (%q) preserved, not an error message",
-			task.Content, "body")
-	}
-	if task.File != "bad.md" {
-		t.Fatalf("File = %q, want %q", task.File, "bad.md")
-	}
-}
-
-// A card whose frontmatter fails to parse must round-trip its real body
-// unchanged through a save that doesn't touch the editor (e.g. adding a
-// tag) — Content must never be the synthetic error message, or a save like
-// this would silently overwrite the file's real body with it.
 func TestParseErrorCardBodySurvivesUnrelatedSave(t *testing.T) {
 	dir := t.TempDir()
 	writeTaskFile(t, dir, "bad.md", "---\nstatus: TODO\norder: soon\n---\nImportant body I do not want to lose.")
 
-	task, err := parseTask(filepath.Join(dir, "bad.md"))
+	task, err := board.ParseTask(filepath.Join(dir, "bad.md"))
 	if err != nil {
 		t.Fatalf("parseTask error: %v", err)
 	}
@@ -194,258 +82,16 @@ func jsonQuote(s string) string {
 	return "\"" + r.Replace(s) + "\""
 }
 
-func TestScanDocsIncludesMalformedFrontmatterTasks(t *testing.T) {
-	dir := t.TempDir()
-	writeTaskFile(t, dir, "bad.md", "---\nstatus: TODO\norder: soon\n---\nbody")
-	writeTaskFile(t, dir, "good.md", "---\nstatus: TODO\n---\nbody")
-
-	if err := scanDocs(dir, filepath.Join(t.TempDir(), "board.json")); err != nil {
-		t.Fatalf("scanDocs error: %v", err)
-	}
-
-	board.mu.RLock()
-	tasks := board.Tasks
-	board.mu.RUnlock()
-
-	if len(tasks) != 2 {
-		t.Fatalf("got %d tasks, want 2 (malformed frontmatter must not be dropped)", len(tasks))
-	}
-}
-
-func TestBootstrapConfigExcludesConflict(t *testing.T) {
-	dir := t.TempDir()
-	writeTaskFile(t, dir, "a_todo.md", "---\nstatus: TODO\n---\nbody")
-	writeTaskFile(t, dir, "b_conflict.md", "<<<<<<< HEAD\nstuff\n=======\nother\n>>>>>>> branch")
-	writeTaskFile(t, dir, "c_done.md", "---\nstatus: DONE\n---\nbody")
-
-	if err := scanDocs(dir, filepath.Join(t.TempDir(), "board.json")); err != nil {
-		t.Fatalf("scanDocs error: %v", err)
-	}
-	if err := bootstrapIfAbsent(dir); err != nil {
-		t.Fatalf("bootstrapIfAbsent error: %v", err)
-	}
-	if err := loadConfig(dir); err != nil {
-		t.Fatalf("loadConfig error: %v", err)
-	}
-
-	want := []string{"TODO", "DONE"}
-	configMu.RLock()
-	got := config.Columns
-	configMu.RUnlock()
-	if !equalStrings(got, want) {
-		t.Fatalf("config.Columns = %v, want %v (CONFLICT must never appear)", got, want)
-	}
-}
-
-func TestLoadConfigKeepsCurrentColumnsWhenNewFileIsEmpty(t *testing.T) {
-	dir := t.TempDir()
-	writeTaskFile(t, dir, configFileName, "columns:\n  - REVIEW\n  - BLOCKED\n  - DONE\n")
-	writeTaskFile(t, dir, "a_todo.md", "---\nstatus: TODO\n---\nbody")
-
-	if err := scanDocs(dir, filepath.Join(t.TempDir(), "board.json")); err != nil {
-		t.Fatalf("scanDocs error: %v", err)
-	}
-	if err := loadConfig(dir); err != nil {
-		t.Fatalf("loadConfig error: %v", err)
-	}
-
-	want := []string{"REVIEW", "BLOCKED", "DONE"}
-	configMu.RLock()
-	got := config.Columns
-	configMu.RUnlock()
-	if !equalStrings(got, want) {
-		t.Fatalf("config.Columns = %v, want %v", got, want)
-	}
-
-	// An editor truncating the file mid-save, or a config left with only
-	// reserved names, must not brick the board by dropping it to zero
-	// columns (every card would fall into the non-droppable OTHER bucket).
-	writeTaskFile(t, dir, configFileName, "columns:\n  - CONFLICT\n  - OTHER\n")
-	if err := loadConfig(dir); err != nil {
-		t.Fatalf("loadConfig error on empty-after-filtering file: %v", err)
-	}
-
-	configMu.RLock()
-	got = config.Columns
-	configMu.RUnlock()
-	if !equalStrings(got, want) {
-		t.Fatalf("config.Columns after all-reserved file = %v, want unchanged %v", got, want)
-	}
-}
-
-func TestLoadConfigDoesNotClobberOnTransientAbsence(t *testing.T) {
-	dir := t.TempDir()
-	writeTaskFile(t, dir, configFileName, "columns:\n  - REVIEW\n  - BLOCKED\n  - DONE\n")
-	writeTaskFile(t, dir, "a_todo.md", "---\nstatus: TODO\n---\nbody")
-
-	if err := scanDocs(dir, filepath.Join(t.TempDir(), "board.json")); err != nil {
-		t.Fatalf("scanDocs error: %v", err)
-	}
-	if err := loadConfig(dir); err != nil {
-		t.Fatalf("loadConfig error: %v", err)
-	}
-
-	want := []string{"REVIEW", "BLOCKED", "DONE"}
-	configMu.RLock()
-	got := config.Columns
-	configMu.RUnlock()
-	if !equalStrings(got, want) {
-		t.Fatalf("config.Columns = %v, want %v", got, want)
-	}
-
-	// Simulate an editor's atomic save (temp-write-then-rename) or a git
-	// checkout transiently removing the file. loadConfig must not
-	// regenerate it from the current task set — that would silently
-	// discard the hand-edited REVIEW/BLOCKED columns.
-	if err := os.Remove(filepath.Join(dir, configFileName)); err != nil {
-		t.Fatalf("failed to remove config: %v", err)
-	}
-	if err := loadConfig(dir); err != nil {
-		t.Fatalf("loadConfig error on missing file: %v", err)
-	}
-
-	configMu.RLock()
-	got = config.Columns
-	configMu.RUnlock()
-	if !equalStrings(got, want) {
-		t.Fatalf("config.Columns after transient removal = %v, want unchanged %v", got, want)
-	}
-	if _, err := os.Stat(filepath.Join(dir, configFileName)); !os.IsNotExist(err) {
-		t.Fatalf("loadConfig must not regenerate the file; got err = %v", err)
-	}
-}
-
-func TestLoadConfigBootstrapsDefaultOnEmptyDocs(t *testing.T) {
-	dir := t.TempDir()
-
-	if err := scanDocs(dir, filepath.Join(t.TempDir(), "board.json")); err != nil {
-		t.Fatalf("scanDocs error: %v", err)
-	}
-	if err := bootstrapIfAbsent(dir); err != nil {
-		t.Fatalf("bootstrapIfAbsent error: %v", err)
-	}
-	if err := loadConfig(dir); err != nil {
-		t.Fatalf("loadConfig error: %v", err)
-	}
-
-	want := []string{"TODO", "IN PROGRESS", "DONE"}
-	configMu.RLock()
-	got := config.Columns
-	configMu.RUnlock()
-	if !equalStrings(got, want) {
-		t.Fatalf("config.Columns = %v, want %v", got, want)
-	}
-}
-
-func TestLoadConfigPreservesExistingOrder(t *testing.T) {
-	dir := t.TempDir()
-	writeTaskFile(t, dir, configFileName, "columns:\n  - REVIEW\n  - BLOCKED\n  - DONE\n")
-
-	if err := scanDocs(dir, filepath.Join(t.TempDir(), "board.json")); err != nil {
-		t.Fatalf("scanDocs error: %v", err)
-	}
-	if err := loadConfig(dir); err != nil {
-		t.Fatalf("loadConfig error: %v", err)
-	}
-
-	want := []string{"REVIEW", "BLOCKED", "DONE"}
-	configMu.RLock()
-	got := config.Columns
-	configMu.RUnlock()
-	if !equalStrings(got, want) {
-		t.Fatalf("config.Columns = %v, want %v", got, want)
-	}
-}
-
-func TestLoadConfigRejectsReservedColumnNames(t *testing.T) {
-	dir := t.TempDir()
-	writeTaskFile(t, dir, configFileName, "columns:\n  - TODO\n  - CONFLICT\n  - OTHER\n  - DONE\n")
-
-	if err := scanDocs(dir, filepath.Join(t.TempDir(), "board.json")); err != nil {
-		t.Fatalf("scanDocs error: %v", err)
-	}
-	if err := loadConfig(dir); err != nil {
-		t.Fatalf("loadConfig should not fatal on reserved names: %v", err)
-	}
-
-	want := []string{"TODO", "DONE"}
-	configMu.RLock()
-	got := config.Columns
-	configMu.RUnlock()
-	if !equalStrings(got, want) {
-		t.Fatalf("config.Columns = %v, want %v", got, want)
-	}
-}
-
-func TestLoadConfigUsesDefaultsWhenInitialConfigHasNoUsableColumns(t *testing.T) {
-	dir := t.TempDir()
-	writeTaskFile(t, dir, configFileName, "columns:\n  - CONFLICT\n  - OTHER\n")
-	configMu.Lock()
-	config = &BoardConfig{}
-	configMu.Unlock()
-
-	if err := loadConfig(dir); err != nil {
-		t.Fatalf("loadConfig error: %v", err)
-	}
-	want := []string{"TODO", "IN PROGRESS", "DONE"}
-	configMu.RLock()
-	got := config.Columns
-	configMu.RUnlock()
-	if !equalStrings(got, want) {
-		t.Fatalf("config.Columns = %v, want safe defaults %v", got, want)
-	}
-}
-
-func TestLoadConfigDeduplicatesColumns(t *testing.T) {
-	dir := t.TempDir()
-	writeTaskFile(t, dir, configFileName, "columns:\n  - TODO\n  - TODO\n  - DONE\n  - TODO\n")
-	if err := loadConfig(dir); err != nil {
-		t.Fatalf("loadConfig error: %v", err)
-	}
-	want := []string{"TODO", "DONE"}
-	configMu.RLock()
-	got := config.Columns
-	configMu.RUnlock()
-	if !equalStrings(got, want) {
-		t.Fatalf("config.Columns = %v, want deduplicated %v", got, want)
-	}
-}
-
-func TestParseTaskRejectsNonFiniteOrder(t *testing.T) {
-	for _, value := range []string{".nan", ".inf", "-.inf"} {
-		t.Run(value, func(t *testing.T) {
-			path := filepath.Join(t.TempDir(), "nonfinite.md")
-			if err := os.WriteFile(path, []byte("---\nstatus: TODO\norder: "+value+"\n---\nbody"), 0644); err != nil {
-				t.Fatal(err)
-			}
-			task, err := parseTask(path)
-			if err != nil {
-				t.Fatalf("parseTask error: %v", err)
-			}
-			if task.Status != "" || task.ParseError == "" || task.Order != nil {
-				t.Fatalf("task = %+v, want parse error in OTHER with no order", task)
-			}
-		})
-	}
-}
-
-func equalStrings(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
-}
-
 func doUpdate(t *testing.T, docsDir string, body string) *httptest.ResponseRecorder {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodPost, "/api/update", bytes.NewBufferString(body))
 	rec := httptest.NewRecorder()
-	updateTask(rec, req, docsDir)
+	store, err := board.Open(docsDir, board.Options{Logf: func(string, ...any) {}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := &server{store: store}
+	srv.handleUpdate(rec, req)
 	return rec
 }
 
@@ -483,7 +129,7 @@ func TestUpdateTaskWritesAndOverwritesOrder(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rec.Code)
 	}
-	task, err := parseTask(filepath.Join(dir, "card.md"))
+	task, err := board.ParseTask(filepath.Join(dir, "card.md"))
 	if err != nil {
 		t.Fatalf("parseTask error: %v", err)
 	}
@@ -495,7 +141,7 @@ func TestUpdateTaskWritesAndOverwritesOrder(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rec.Code)
 	}
-	task, err = parseTask(filepath.Join(dir, "card.md"))
+	task, err = board.ParseTask(filepath.Join(dir, "card.md"))
 	if err != nil {
 		t.Fatalf("parseTask error: %v", err)
 	}
@@ -518,7 +164,7 @@ func TestUpdateTaskWritesOrderWithNoExistingFrontmatter(t *testing.T) {
 		t.Fatalf("status = %d, want 200", rec.Code)
 	}
 
-	task, err := parseTask(filepath.Join(dir, "card.md"))
+	task, err := board.ParseTask(filepath.Join(dir, "card.md"))
 	if err != nil {
 		t.Fatalf("parseTask error: %v", err)
 	}
@@ -557,7 +203,7 @@ func TestUpdateTaskWritesTagsWithNoExistingFrontmatter(t *testing.T) {
 		t.Fatalf("status = %d, want 200", rec.Code)
 	}
 
-	task, err := parseTask(filepath.Join(dir, "a.md"))
+	task, err := board.ParseTask(filepath.Join(dir, "a.md"))
 	if err != nil {
 		t.Fatalf("parseTask error: %v", err)
 	}
@@ -579,7 +225,7 @@ func TestUpdateTaskDragPreservesBodyWithNoExistingFrontmatter(t *testing.T) {
 		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
 	}
 
-	task, err := parseTask(filepath.Join(dir, "a.md"))
+	task, err := board.ParseTask(filepath.Join(dir, "a.md"))
 	if err != nil {
 		t.Fatalf("parseTask error: %v", err)
 	}
@@ -599,7 +245,7 @@ func TestUpdateTaskTagOnlyWritePreservesBodyWithNoExistingFrontmatter(t *testing
 		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
 	}
 
-	task, err := parseTask(filepath.Join(dir, "a.md"))
+	task, err := board.ParseTask(filepath.Join(dir, "a.md"))
 	if err != nil {
 		t.Fatalf("parseTask error: %v", err)
 	}
@@ -623,7 +269,7 @@ func TestUpdateTaskDragPreservesThematicBreakBody(t *testing.T) {
 		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
 	}
 
-	task, err := parseTask(filepath.Join(dir, "notes.md"))
+	task, err := board.ParseTask(filepath.Join(dir, "notes.md"))
 	if err != nil {
 		t.Fatalf("parseTask error: %v", err)
 	}
@@ -643,7 +289,7 @@ func TestUpdateTaskHandlesEmptyFrontmatterBlock(t *testing.T) {
 		t.Fatalf("status = %d, want 200", rec.Code)
 	}
 
-	task, err := parseTask(filepath.Join(dir, "h.md"))
+	task, err := board.ParseTask(filepath.Join(dir, "h.md"))
 	if err != nil {
 		t.Fatalf("parseTask error: %v", err)
 	}
@@ -678,52 +324,129 @@ func TestUpdateTaskAllowsDeliberateEmptyBody(t *testing.T) {
 
 // F25: a file with no frontmatter but two "---" thematic breaks in its body
 // must not be misparsed as having frontmatter.
-func TestParseTaskIgnoresNonLeadingThematicBreaks(t *testing.T) {
-	dir := t.TempDir()
-	writeTaskFile(t, dir, "notes.md", "# My Notes\n\nintro\n\n---\n\nmiddle\n\n---\n\nend\n")
 
-	task, err := parseTask(filepath.Join(dir, "notes.md"))
+func TestUpdateHTTPErrorMapping(t *testing.T) {
+	for _, tc := range []struct {
+		name, method, body, content, message string
+		code                                 int
+	}{
+		{"method", http.MethodGet, `{}`, "body", "Method not allowed", 405},
+		{"json", http.MethodPost, `{`, "body", "unexpected EOF", 400},
+		{"missing", http.MethodPost, `{"status":"TODO"}`, "body", board.ErrMissingFile.Error(), 400},
+		{"invalid", http.MethodPost, `{"file":"../card.md","status":"TODO"}`, "body", board.ErrInvalidFile.Error(), 400},
+		{"conflict", http.MethodPost, `{"file":"card.md","status":"CONFLICT"}`, "body", board.ErrConflictStatus.Error(), 400},
+		{"other", http.MethodPost, `{"file":"card.md","status":"OTHER"}`, "body", board.ErrOtherStatus.Error(), 400},
+		{"nothing", http.MethodPost, `{"file":"card.md"}`, "body", board.ErrNothingToUpdate.Error(), 400},
+		{"frontmatter", http.MethodPost, `{"file":"card.md","status":"DONE"}`, "---\nstatus: [\n---\nbody", board.ErrInvalidFrontmatter.Error(), 500},
+		{"IO", http.MethodPost, `{"file":"missing.md","status":"DONE"}`, "body", "", 500},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeTaskFile(t, dir, "card.md", tc.content)
+			store, err := board.Open(dir, board.Options{Logf: func(string, ...any) {}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			srv := &server{store: store}
+			rec := httptest.NewRecorder()
+			req := httptest.NewRequest(tc.method, "/api/update", strings.NewReader(tc.body))
+			srv.handleUpdate(rec, req)
+			if rec.Code != tc.code {
+				t.Fatalf("code=%d want %d: %s", rec.Code, tc.code, rec.Body.String())
+			}
+			if tc.message != "" && rec.Body.String() != tc.message+"\n" {
+				t.Fatalf("message=%q want %q", rec.Body.String(), tc.message)
+			}
+		})
+	}
+}
+func TestHTTPDoesNotExposeUnset(t *testing.T) {
+	dir := t.TempDir()
+	writeTaskFile(t, dir, "card.md", "---\nstatus: TODO\n---\nbody")
+	rec := doUpdate(t, dir, `{"file":"card.md","unset":["status"]}`)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("unset-only code=%d", rec.Code)
+	}
+	rec = doUpdate(t, dir, `{"file":"card.md","tags":[],"unset":["status"]}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("tags code=%d", rec.Code)
+	}
+	task, err := board.ParseTask(filepath.Join(dir, "card.md"))
+	if err != nil || task.Status != "TODO" || len(task.Tags) != 0 {
+		t.Fatalf("HTTP unset applied: %+v %v", task, err)
+	}
+}
+func TestBoardHTTPResponse(t *testing.T) {
+	dir := t.TempDir()
+	writeTaskFile(t, dir, "card.md", "---\nstatus: TODO\n---\nbody")
+	store, err := board.Open(dir, board.Options{})
 	if err != nil {
-		t.Fatalf("parseTask error: %v", err)
+		t.Fatal(err)
 	}
-	if task.ParseError != "" {
-		t.Fatalf("ParseError = %q, want empty — this file never had frontmatter", task.ParseError)
+	srv := &server{store: store}
+	rec := httptest.NewRecorder()
+	srv.handleBoard(rec, httptest.NewRequest(http.MethodGet, "/api/board", nil))
+	var response struct {
+		Columns []string     `json:"columns"`
+		Tasks   []board.Task `json:"tasks"`
+		DocsDir string       `json:"docsDir"`
 	}
-	if !strings.Contains(task.Content, "intro") || !strings.Contains(task.Content, "end") {
-		t.Fatalf("Content = %q, want the full body preserved", task.Content)
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if rec.Code != 200 || rec.Header().Get("Content-Type") != "application/json" || response.DocsDir != store.Dir() || len(response.Tasks) != 1 || len(response.Columns) != 1 || response.Columns[0] != "TODO" {
+		t.Fatalf("response=%+v", response)
 	}
 }
 
-func TestParseTaskOrderRoundTrip(t *testing.T) {
-	dir := t.TempDir()
+// sseRecorder signals flushes without opening a network socket.
+type sseRecorder struct {
+	*httptest.ResponseRecorder
+	flushed chan struct{}
+}
 
-	writeTaskFile(t, dir, "with_order.md", "---\nstatus: TODO\norder: 1.5\n---\nbody")
-	task, err := parseTask(filepath.Join(dir, "with_order.md"))
-	if err != nil {
-		t.Fatalf("parseTask error: %v", err)
+func (r *sseRecorder) Flush() { r.ResponseRecorder.Flush(); r.flushed <- struct{}{} }
+func TestSSEDeliveryAndCleanup(t *testing.T) {
+	srv := &server{clients: map[chan string]bool{}}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	req := httptest.NewRequest(http.MethodGet, "/api/events", nil).WithContext(ctx)
+	rec := &sseRecorder{ResponseRecorder: httptest.NewRecorder(), flushed: make(chan struct{}, 1)}
+	done := make(chan struct{})
+	go func() { srv.handleEvents(rec, req); close(done) }()
+	deadline := time.After(time.Second)
+	ticker := time.NewTicker(time.Millisecond)
+	defer ticker.Stop()
+	registered := false
+	for !registered {
+		select {
+		case <-ticker.C:
+			srv.clientsMu.Lock()
+			registered = len(srv.clients) == 1
+			srv.clientsMu.Unlock()
+		case <-deadline:
+			t.Fatal("SSE client did not register")
+		}
 	}
-	if task.Order == nil || *task.Order != 1.5 {
-		t.Fatalf("Order = %v, want *float64(1.5)", task.Order)
+	srv.broadcast("update")
+	select {
+	case <-rec.flushed:
+	case <-time.After(time.Second):
+		t.Fatal("SSE did not flush")
 	}
-
-	writeTaskFile(t, dir, "no_order.md", "---\nstatus: TODO\n---\nbody")
-	task, err = parseTask(filepath.Join(dir, "no_order.md"))
-	if err != nil {
-		t.Fatalf("parseTask error: %v", err)
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("SSE did not stop")
 	}
-	if task.Order != nil {
-		t.Fatalf("Order = %v, want nil", task.Order)
+	if rec.Body.String() != "data: update\n\n" || rec.Header().Get("Content-Type") != "text/event-stream" {
+		t.Fatalf("SSE response=%s", rec.Body.String())
 	}
-
-	writeTaskFile(t, dir, "zero_order.md", "---\nstatus: TODO\norder: 0\n---\nbody")
-	task, err = parseTask(filepath.Join(dir, "zero_order.md"))
-	if err != nil {
-		t.Fatalf("parseTask error: %v", err)
-	}
-	if task.Order == nil {
-		t.Fatal("Order = nil, want *float64(0), not nil")
-	}
-	if *task.Order != 0 {
-		t.Fatalf("Order = %v, want 0", *task.Order)
+	srv.clientsMu.Lock()
+	n := len(srv.clients)
+	srv.clientsMu.Unlock()
+	if n != 0 {
+		t.Fatal("SSE client did not unregister")
 	}
 }

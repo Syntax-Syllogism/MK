@@ -1,6 +1,6 @@
 ---
 epic: QA
-order: quick
+order: 3
 project: MK
 status: DONE
 tags:

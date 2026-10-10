@@ -179,6 +179,36 @@
         background: var(--border);
         opacity: 0.8;
       }
+      .card-deps {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem;
+        margin-top: 0.5rem;
+      }
+      .dep {
+        font: inherit;
+        font-size: 0.6rem;
+        padding: 0.2rem 0.6rem;
+        border: 0;
+        border-radius: 1rem;
+        background: var(--accent);
+        color: white;
+        cursor: pointer;
+      }
+      .dep-missing,
+      .dep-cycle {
+        background: rgba(239, 68, 68, 0.1);
+        color: #ef4444;
+      }
+      .dep-missing {
+        cursor: help;
+      }
+      .dep-cycle {
+        font-size: 0.6rem;
+        padding: 0.2rem 0.6rem;
+        border-radius: 1rem;
+      }
 
       .table-view {
         width: 100%;
@@ -599,7 +629,51 @@
             ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c],
         );
 
-      const renderCard = (t) => `
+      const findDependencyCycleFiles = (tasks) => {
+        const tasksByFile = new Map(tasks.map((task) => [task.file, task]));
+        const visiting = new Set();
+        const visited = new Set();
+        const stack = [];
+        const cycleFiles = new Set();
+
+        const visit = (file) => {
+          if (visiting.has(file)) {
+            stack.slice(stack.indexOf(file)).forEach((cycleFile) => cycleFiles.add(cycleFile));
+            return;
+          }
+          if (visited.has(file)) return;
+
+          visited.add(file);
+          visiting.add(file);
+          stack.push(file);
+          (tasksByFile.get(file).dependsOn || []).forEach((slug) => {
+            const dependencyFile = `${slug}.md`;
+            if (tasksByFile.has(dependencyFile)) visit(dependencyFile);
+          });
+          stack.pop();
+          visiting.delete(file);
+        };
+
+        tasksByFile.forEach((_, file) => visit(file));
+        return cycleFiles;
+      };
+
+      const renderCard = (t, dependencyContext) => {
+        const dependencies = t.dependsOn || [];
+        const hasCycle = dependencyContext.cycleFiles.has(t.file);
+        const dependencyBadges = dependencies
+          .map((slug) => {
+            const missing = !dependencyContext.knownFiles.has(`${slug}.md`);
+            const classes = `dep${missing ? " dep-missing" : ""}`;
+            const title = missing ? "unknown card" : `open ${slug}`;
+            return `<button type="button" class="${classes}" data-dep="${escapeHtml(slug)}" title="${escapeHtml(title)}">${escapeHtml(slug)}</button>`;
+          })
+          .join("");
+        const dependencySection = dependencies.length || hasCycle
+          ? `<div class="card-deps">${dependencyBadges}${hasCycle ? '<span class="dep-cycle" title="dependency cycle detected">cycle</span>' : ""}</div>`
+          : "";
+
+        return `
         <div class="card ${t.status === "CONFLICT" ? "conflict" : ""}"
              data-file="${escapeHtml(t.file)}"
              draggable="${t.status !== "CONFLICT"}">
@@ -609,16 +683,18 @@
             <div class="card-tags">
                 ${(t.tags || []).map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("")}
             </div>
+            ${dependencySection}
         </div>
       `;
+      };
 
-      const renderColumn = (section) => {
+      const renderColumn = (section, dependencyContext) => {
         const tasks = [...section.tasks].sort(byOrder);
         return `
           <div class="column" data-status="${escapeHtml(section.name)}">
             <div class="column-header">${escapeHtml(section.name)}</div>
             <div class="card-list" data-droppable="${section.droppable}">
-              ${tasks.map(renderCard).join("")}
+              ${tasks.map((task) => renderCard(task, dependencyContext)).join("")}
             </div>
           </div>
         `;
@@ -628,6 +704,10 @@
         const container = document.getElementById("kanban-view");
         const conflicts = state.tasks.filter((t) => t.status === "CONFLICT");
         const known = new Set(state.columns);
+        const dependencyContext = {
+          knownFiles: new Set(state.tasks.map((task) => task.file)),
+          cycleFiles: findDependencyCycleFiles(state.tasks),
+        };
         const others = state.tasks.filter(
           (t) => t.status !== "CONFLICT" && !known.has(t.status),
         );
@@ -645,13 +725,23 @@
         if (others.length)
           sections.push({ name: "OTHER", tasks: others.filter(isTaskVisible), droppable: false });
 
-        container.innerHTML = sections.map(renderColumn).join("");
+        container.innerHTML = sections.map((section) => renderColumn(section, dependencyContext)).join("");
         attachCardListeners(container);
       };
 
       const attachCardListeners = (container) => {
         container.querySelectorAll(".card").forEach((card) => {
-          card.addEventListener("click", () => openCard(card.dataset.file));
+          card.addEventListener("click", (event) => {
+            const dependency = event.target.closest(".dep");
+            if (dependency) {
+              event.stopPropagation();
+              if (!dependency.classList.contains("dep-missing")) {
+                openCard(`${dependency.dataset.dep}.md`);
+              }
+              return;
+            }
+            openCard(card.dataset.file);
+          });
           card.addEventListener("dragstart", (e) =>
             handleDragStart(e, card.dataset.file),
           );

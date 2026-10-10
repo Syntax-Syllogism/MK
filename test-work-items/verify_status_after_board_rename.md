@@ -2,7 +2,7 @@
 epic: QA
 order: 0
 project: MK
-status: UNDER REVIEW
+status: REVIEW
 tags:
     - process
 ---

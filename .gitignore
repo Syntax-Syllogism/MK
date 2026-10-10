@@ -6,6 +6,11 @@ mk.exe
 # GoReleaser
 dist/
 
+# Docs site (Astro Starlight)
+docs-site/node_modules/
+docs-site/dist/
+docs-site/.astro/
+
 # Go
 /vendor/
 .gocache/
@@ -31,3 +36,4 @@ CLAUDE.md
 AGENTS.md
 bin/
 release.config.mjs
+loop.config.mjs

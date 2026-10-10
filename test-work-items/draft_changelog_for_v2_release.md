@@ -1,7 +1,3 @@
----
-order: 5
-status: TODO
----
 # Draft Changelog for the v2.0 Release
 
 Pulling this together from the commit log, split into the usual sections. No

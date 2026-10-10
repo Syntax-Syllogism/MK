@@ -1,0 +1,24 @@
+MK // /tasks                                            board  filters (0)  test
+PROJECTS: [MK]
+EPICS: [CORE] [NO EPIC] [QA] [SETUP] [UI]
+TAGS: [analytics] [backend] [choco] [copy] [css] [design] [docs] [frontend] [go]
+[incident] [marketing] [mobile] [postmortem] [process] [qa] [smoke-test] [ui]
+CONFLICT 1 ⊘               TODO 4                     IN PROGRESS 1 3 ›
+┏━━━━━━━━━━━━━━━━━━━━━━━━┓ ┏━━━━━━━━━━━━━━━━━━━━━━━━┓ ┏━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃resolve_merge_conflict_…┃ ┃test_frontend.md        ┃ ┃setup_backend.md        ┃
+┃                        ┃ ┃frontend, css, vanilla,…┃ ┃backend, go             ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━┛ ┗━━━━━━━━━━━━━━━━━━━━━━━━┛ ┗━━━━━━━━━━━━━━━━━━━━━━━━┛
+                           ╭────────────────────────╮
+                           │read_prd.md             │
+                           │docs                    │
+                           ╰────────────────────────╯
+                           ╭────────────────────────╮
+                           │wire_up_analytics_event…│
+                           │analytics, backend      │
+                           ╰────────────────────────╯
+                           ╭────────────────────────╮
+                           │polish_mobile_nav_trans…│
+                           │design, mobile          │
+                           ╰────────────────────────╯
+
+h/l ←/→ section / chip • j/k ↓/↑ card / row / scroll • g/G first / last • ? help
