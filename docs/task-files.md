@@ -44,6 +44,11 @@ it writes the file.
 MK uses the file name, without `.md`, as the card title. A `title:` key in the
 frontmatter does not change the title. Name the file to match the title you want.
 
+The terminal board also shows the first `# Heading` in the body below the file
+name, and the table's TITLE column uses it. Only ATX headings outside fenced code
+blocks count. The heading is for display and search only; it does not change the
+task's file name or ID.
+
 ## Special cards
 
 A card may appear outside your configured columns. There are three cases:

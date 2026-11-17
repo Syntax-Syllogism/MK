@@ -37,11 +37,13 @@ snapshot of the task folder.
       "tags": ["docs"],
       "dependsOn": ["design-task"],
       "title": "write-install-notes",
+      "heading": "Write install notes",
       "content": "# Write install notes\n\nAdd the install steps...",
       "parseError": ""
     }
   ],
-  "docsDir": "/home/you/project/docs"
+  "docsDir": "/home/you/project/docs",
+  "archived": {"old-task.md": true}
 }
 ```
 
@@ -54,9 +56,11 @@ snapshot of the task folder.
 | `tasks[].order` | Present only when the task has an `order` value. |
 | `tasks[].dependsOn` | Present only when the task has dependencies. |
 | `tasks[].title` | The card title, which is the file name without `.md`. |
+| `tasks[].heading` | The first Markdown H1 outside fenced code blocks. Present only when the body has one. |
 | `tasks[].content` | The Markdown body, without the frontmatter. For a `CONFLICT` task, the whole raw file. |
 | `tasks[].parseError` | Present only when the frontmatter could not be parsed. |
 | `docsDir` | The absolute path of the task folder. |
+| `archived` | An object whose keys are the `.md` file names directly in the archive folder (`archive_dir`, default `archive`), each set to `true`. Empty when nothing is archived. The web board does not use it yet. |
 
 A file that contains Git conflict markers has `status` set to `CONFLICT`. See
 [Special cards](web-ui.md#special-cards).

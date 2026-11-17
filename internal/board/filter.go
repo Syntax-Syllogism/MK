@@ -63,7 +63,7 @@ func (f Filter) Visible(t Task) bool {
 // MatchesQuery accepts a pre-lowered body so interactive consumers can cache it.
 func (f Filter) MatchesQuery(t Task, lowerBody string) bool {
 	for _, term := range strings.Fields(f.Query) {
-		if len(fuzzy.Find(term, []string{t.Title})) > 0 {
+		if len(fuzzy.Find(term, []string{t.Title, t.Heading})) > 0 {
 			continue
 		}
 		needle := strings.ToLower(term)
@@ -80,11 +80,11 @@ func (f Filter) MatchesQuery(t Task, lowerBody string) bool {
 	return true
 }
 
-// Score ranks title matches; metadata-only matches score zero.
+// Score ranks each term by its best filename or heading match; metadata-only matches score zero.
 func (f Filter) Score(t Task) int {
 	score := 0
 	for _, term := range strings.Fields(f.Query) {
-		if matches := fuzzy.Find(term, []string{t.Title}); len(matches) > 0 {
+		if matches := fuzzy.Find(term, []string{t.Title, t.Heading}); len(matches) > 0 {
 			score += matches[0].Score
 		}
 	}

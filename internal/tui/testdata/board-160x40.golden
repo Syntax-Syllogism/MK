@@ -6,18 +6,22 @@ TAGS: [analytics] [backend] [choco] [copy] [css] [design] [docs] [frontend] [go]
 CONFLICT 1 ⊘                     TODO 4                          IN PROGRESS 1                   UNDER REVIEW 2                  DONE 3 1 ›
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓ ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓ ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓ ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓ ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
 ┃resolve_merge_conflict_in_onb…┃ ┃test_frontend.md             ┃ ┃setup_backend.md             ┃ ┃writeup_deploy_incident_post…┃ ┃design_frontend.md           ┃
-┃                              ┃ ┃frontend, css, vanilla, choco┃ ┃backend, go                  ┃ ┃incident, postmortem         ┃ ┃frontend, css, vanilla, choco┃
-┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛ ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛ ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛ ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛ ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+┃                              ┃ ┃Design Frontend              ┃ ┃Initialize Project           ┃ ┃Write Up the Tuesday Deploy …┃ ┃Design Frontend              ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛ ┃frontend, css, vanilla, choco┃ ┃backend, go                  ┃ ┃incident, postmortem         ┃ ┃frontend, css, vanilla, choco┃
+                                 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛ ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛ ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛ ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
                                  ╭─────────────────────────────╮                                 ╭─────────────────────────────╮ ╭─────────────────────────────╮
                                  │read_prd.md                  │                                 │draft_pricing_page_copy.md   │ │design_empty_state_illustrat…│
+                                 │Read PRD                     │                                 │Draft Pricing Page Copy      │ │Design the Empty-State Illus…│
                                  │docs                         │                                 │marketing, copy              │ │design, ui                   │
                                  ╰─────────────────────────────╯                                 ╰─────────────────────────────╯ ╰─────────────────────────────╯
                                  ╭─────────────────────────────╮                                                                 ╭─────────────────────────────╮
                                  │wire_up_analytics_events.md  │                                                                 │document_smoke_test_plan.md  │
+                                 │Wire Up Board Analytics Even…│                                                                 │Document the Smoke Test Plan…│
                                  │analytics, backend           │                                                                 │qa, smoke-test, docs         │
                                  ╰─────────────────────────────╯                                                                 ╰─────────────────────────────╯
                                  ╭─────────────────────────────╮
                                  │polish_mobile_nav_transition…│
+                                 │Polish Mobile Nav Transitions│
                                  │design, mobile               │
                                  ╰─────────────────────────────╯
 
@@ -33,8 +37,4 @@ CONFLICT 1 ⊘                     TODO 4                          IN PROGRESS 1
 
 
 
-
-
-
-
-h/l ←/→ section / chip • j/k ↓/↑ card / row / scroll • g/G first / last • ? help
+space grab · / search · enter preview · t tags · e edit · u undo · f filters · : palette · v view · z density · A archive · c collapse · ? help

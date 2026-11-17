@@ -17,6 +17,7 @@ type Task struct {
 	Tags      []string `yaml:"tags" json:"tags"`
 	DependsOn []string `yaml:"depends_on" json:"dependsOn,omitempty"`
 	Title     string   `json:"title"`
+	Heading   string   `yaml:"-" json:"heading,omitempty"`
 	Content   string   `json:"content"`
 	// ParseError is set only when the file's frontmatter failed to parse; it
 	// is never read from or written to YAML. Content still holds the file's
@@ -74,6 +75,7 @@ func ParseTask(path string) (Task, error) {
 				task.ParseError = "order must be a finite number"
 			}
 			task.Content = strings.TrimSpace(parts[2])
+			task.Heading = firstHeading(task.Content)
 			return task, nil
 		}
 		task.Status = fm.Status
@@ -87,7 +89,41 @@ func ParseTask(path string) (Task, error) {
 		task.Content = strings.TrimSpace(string(content))
 	}
 
+	task.Heading = firstHeading(task.Content)
 	return task, nil
+}
+
+func firstHeading(body string) string {
+	var fence byte
+	fenceLength := 0
+	for _, line := range strings.Split(body, "\n") {
+		line = strings.TrimRight(line, "\r")
+		trimmed := strings.TrimLeft(line, " ")
+		if len(trimmed) > 0 && (trimmed[0] == '`' || trimmed[0] == '~') {
+			marker := trimmed[0]
+			length := len(trimmed) - len(strings.TrimLeft(trimmed, string(marker)))
+			if length >= 3 {
+				if fence == 0 {
+					fence, fenceLength = marker, length
+				} else if marker == fence && length >= fenceLength && strings.TrimSpace(trimmed[length:]) == "" {
+					fence, fenceLength = 0, 0
+				}
+				continue
+			}
+		}
+		if fence != 0 || !strings.HasPrefix(line, "# ") {
+			continue
+		}
+		heading := strings.TrimSpace(line[2:])
+		withoutHashes := strings.TrimRight(heading, "#")
+		if withoutHashes != heading && (withoutHashes == "" || strings.HasSuffix(withoutHashes, " ") || strings.HasSuffix(withoutHashes, "\t")) {
+			heading = strings.TrimSpace(withoutHashes)
+		}
+		if heading != "" {
+			return heading
+		}
+	}
+	return ""
 }
 
 // FrontmatterKeys returns raw top-level YAML nodes, distinguishing missing keys

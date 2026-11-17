@@ -182,3 +182,62 @@ func writeTaskFile(t *testing.T, dir, name, content string) {
 		t.Fatal(err)
 	}
 }
+
+func TestFirstHeading(t *testing.T) {
+	for _, tc := range []struct{ name, body, want string }{
+		{"plain", "# Readable title", "Readable title"},
+		{"later", "Intro\n## Subtitle\n# First\n# Second", "First"},
+		{"no space", "#tag\n## Subtitle", ""},
+		{"backticks", "```md\n# Hidden\n```\n# Visible", "Visible"},
+		{"tildes", "~~~\n# Hidden\n~~~\n# Visible", "Visible"},
+		{"mixed fences", "````md\n~~~\n# Hidden\n```\n# Still hidden\n````\n# Visible", "Visible"},
+		{"closing hashes", "# Title ###  ", "Title"},
+		{"literal hash", "# C#", "C#"},
+		{"empty", "# \n# Actual", "Actual"},
+		{"absent", "Title\n===", ""},
+		{"CRLF", "Intro\r\n# Title ###\r\n", "Title"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := firstHeading(tc.body); got != tc.want {
+				t.Fatalf("firstHeading = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestParseTaskHeading(t *testing.T) {
+	for _, tc := range []struct{ name, content, want string }{
+		{"normal", "---\nstatus: TODO\nheading: Fake\n---\n# Real heading", "Real heading"},
+		{"body only", "# Real heading", "Real heading"},
+		{"parse error", "---\norder: soon\n---\n# Real heading", "Real heading"},
+		{"frontmatter only", "---\nheading: Fake\n---\nBody", ""},
+		{"conflict", "# Heading\n<<<<<<< ours\n=======\n>>>>>>> theirs", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeTaskFile(t, dir, "task.md", tc.content)
+			task, err := ParseTask(filepath.Join(dir, "task.md"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if task.Heading != tc.want || task.Title != "task" || task.File != "task.md" {
+				t.Fatalf("unexpected task: %+v", task)
+			}
+			data, err := json.Marshal(task)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var fields map[string]any
+			if err := json.Unmarshal(data, &fields); err != nil {
+				t.Fatal(err)
+			}
+			if tc.want == "" {
+				if _, ok := fields["heading"]; ok {
+					t.Fatal("empty heading must be omitted")
+				}
+			} else if fields["heading"] != tc.want {
+				t.Fatalf("missing heading in JSON: %s", data)
+			}
+		})
+	}
+}

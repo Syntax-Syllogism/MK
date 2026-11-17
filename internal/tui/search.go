@@ -61,16 +61,24 @@ func (m *Model) nextMatch(back bool) {
 	m.tableCur = file
 }
 func (m *Model) highlightTitle(title string) string {
+	return m.highlightText(title, strings.TrimSuffix(title, ".md"))
+}
+
+func (m *Model) highlightHeading(heading string) string {
+	return m.highlightText(heading, heading)
+}
+
+func (m *Model) highlightText(text, candidate string) string {
 	indexes := map[int]bool{}
 	for _, term := range strings.Fields(m.filter.Query) {
-		if hits := fuzzy.Find(term, []string{strings.TrimSuffix(title, ".md")}); len(hits) > 0 {
+		if hits := fuzzy.Find(term, []string{candidate}); len(hits) > 0 {
 			for _, i := range hits[0].MatchedIndexes {
 				indexes[i] = true
 			}
 		}
 	}
 	var out strings.Builder
-	for i, r := range title {
+	for i, r := range text {
 		text := string(r)
 		if indexes[i] {
 			text = lipgloss.NewStyle().Bold(true).Underline(true).Render(text)

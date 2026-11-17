@@ -1,6 +1,7 @@
 package board
 
 import (
+	"github.com/sahilm/fuzzy"
 	"reflect"
 	"testing"
 )
@@ -69,5 +70,29 @@ func TestFilterQuery(t *testing.T) {
 	}
 	if (Filter{Query: "needle"}).Score(task) != 0 {
 		t.Fatal("body must not contribute score")
+	}
+}
+
+func TestFilterHeading(t *testing.T) {
+	f := Filter{Query: "initproj"}
+	task := Task{Title: "setup-backend", Heading: "Initialize Project"}
+	if !f.MatchesQuery(task, "") || !f.Visible(task) {
+		t.Fatal("heading must fuzzy-match without relying on body substrings")
+	}
+	for _, task := range []Task{
+		{Title: "initproj", Heading: "Initialize Project"},
+		{Title: "Initialize Project", Heading: "initproj"},
+		{Title: "unrelated", Heading: "Initialize Project"},
+	} {
+		want := fuzzy.Find(f.Query, []string{task.Heading})[0].Score
+		if hits := fuzzy.Find(f.Query, []string{task.Title}); len(hits) > 0 {
+			want = max(want, hits[0].Score)
+		}
+		if got := f.Score(task); got != want {
+			t.Fatalf("Score(%+v) = %d, want %d", task, got, want)
+		}
+	}
+	if (Filter{Query: "initproj absent"}).Visible(task) {
+		t.Fatal("all terms must match")
 	}
 }

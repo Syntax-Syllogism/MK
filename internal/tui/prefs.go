@@ -10,9 +10,10 @@ import (
 )
 
 type Prefs struct {
-	View             string `json:"view"`
-	Compact          bool   `json:"compact"`
-	FiltersCollapsed bool   `json:"filtersCollapsed"`
+	Collapsed        []string `json:"collapsed,omitempty"`
+	View             string   `json:"view"`
+	Compact          bool     `json:"compact"`
+	FiltersCollapsed bool     `json:"filtersCollapsed"`
 }
 
 func defaultPrefs() Prefs { return Prefs{View: "board", Compact: true} }

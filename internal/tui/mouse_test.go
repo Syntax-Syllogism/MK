@@ -2,7 +2,7 @@ package tui
 
 import (
 	"charm.land/bubbles/v2/key"
-	"charm.land/bubbles/v2/viewport"
+
 	tea "charm.land/bubbletea/v2"
 	"fmt"
 	"reflect"
@@ -107,7 +107,7 @@ func TestMousePreviewDependency(t *testing.T) {
 	}
 }
 func TestHelpBindingCoverage(t *testing.T) {
-	groups := []string{"Board", "Grab", "Table", "Preview", "Filter panel", "Tag popup", "Search", "Global"}
+	groups := []string{"Board", "Grab", "Table", "Preview", "Preview find", "Filter panel", "Chip find", "Tag popup", "Search", "Global", "Palette", "Overlay"}
 	for _, binding := range allBindings() {
 		found := false
 		for _, group := range groups {
@@ -189,7 +189,7 @@ func TestHelpSuspendsTextEntryAndGrab(t *testing.T) {
 }
 
 func TestViewportBindingsAppearInHelp(t *testing.T) {
-	defaults := reflect.ValueOf(viewport.DefaultKeyMap())
+	defaults := reflect.ValueOf(pagerKeys())
 	for _, group := range []string{"Preview", "Overlay"} {
 		var documented []string
 		for _, binding := range groupBindings(group) {

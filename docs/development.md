@@ -48,8 +48,9 @@ The test files cover these areas:
   CONFLICT and OTHER write guards.
 - `tui_test.go`: TUI flag errors, and that `-version` does not open a store.
 - `internal/tui/*_test.go`: layout, navigation, reloads, dependencies,
-  preferences, terminal sizes, card actions, undo, and a check that keys which
-  don't write never modify task files.
+  preferences, terminal sizes, card actions, undo, the keymap help and command
+  palette, the scrollable filter panel and chip find, and a check that keys
+  which don't write never modify task files.
 
 Run the search and mouse checks alone with:
 
@@ -57,10 +58,16 @@ Run the search and mouse checks alone with:
 go test -count=1 ./internal/tui -run 'Test(Search|Mouse|NoMouse|HelpBinding)'
 ```
 
-Run the filter checks alone with:
+Run the store filter checks alone with:
 
 ```bash
 go test -count=1 ./internal/board -run TestFilter
+```
+
+Run the TUI filter-panel checks alone with:
+
+```bash
+go test -count=1 ./internal/tui -run TestFilter
 ```
 
 Board and table snapshots live in `internal/tui/testdata/`. After an intentional

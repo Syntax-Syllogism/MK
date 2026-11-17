@@ -20,6 +20,8 @@ type previewState struct {
 	back               []string
 	removed            bool
 	cacheKey, rendered string
+	logical            string
+	find               *previewFindState
 }
 
 func (m *Model) task(file string) (board.Task, bool) {
@@ -35,8 +37,10 @@ func (m *Model) openPreview(file string) {
 	if !ok {
 		return
 	}
+	m.preview.find = nil
 	m.preview.task = t
 	m.preview.removed = false
+	m.preview.viewport.SetXOffset(0)
 	m.preview.depCursor = -1
 	m.preview.viewport.GotoTop()
 	m.renderPreview()
@@ -77,6 +81,7 @@ func (m *Model) renderPreview() {
 	key := fmt.Sprintf("%s:%d:%x:%t:%s", t.File, w, sha256.Sum256([]byte(t.Content)), m.dark, t.Status)
 	if key != m.preview.cacheKey {
 		text := t.Content
+		m.preview.logical = text
 		if t.Status != board.StatusConflict {
 			// Glamour v2 replaces WithAutoStyle with explicit terminal background detection.
 			style := "dark"
@@ -87,6 +92,12 @@ func (m *Model) renderPreview() {
 			if err == nil {
 				if rendered, err := renderer.Render(text); err == nil {
 					text = rendered
+					// A second rendering keeps paragraph text continuous across soft wraps.
+					if unwrapped, err := glamour.NewTermRenderer(glamour.WithStandardStyle(style), glamour.WithWordWrap(0)); err == nil {
+						if logical, err := unwrapped.Render(t.Content); err == nil {
+							m.preview.logical = logical
+						}
+					}
 				}
 			}
 		}
@@ -97,8 +108,12 @@ func (m *Model) renderPreview() {
 	m.preview.viewport.SetHeight(max(1, m.height-2-min(m.height-3, lineCount(m.previewHeader()))))
 	m.preview.viewport.SetContent(m.preview.rendered)
 	m.preview.viewport.SetYOffset(offset)
+	if m.preview.find != nil {
+		m.rebuildPreviewFind(false)
+	}
 }
 func (m *Model) leavePreview() {
+	m.preview.find = nil
 	t := m.preview.task
 	if !m.filter.Visible(t) {
 		m.clearFilters()
@@ -112,6 +127,8 @@ func (m *Model) leavePreview() {
 }
 func (m *Model) updatePreview(msg tea.KeyPressMsg) tea.Cmd {
 	switch msg.String() {
+	case "ctrl+f", "/":
+		return m.startPreviewFind()
 	case "g":
 		m.preview.viewport.GotoTop()
 		return nil
@@ -149,7 +166,9 @@ func (m *Model) updatePreview(msg tea.KeyPressMsg) tea.Cmd {
 		i := m.preview.depCursor
 		if i >= 0 && i < len(m.preview.task.DependsOn) {
 			slug := m.preview.task.DependsOn[i]
-			if m.deps.Missing(slug) {
+			if m.deps.IsArchived(slug) {
+				m.notify("archived: " + slug)
+			} else if m.deps.Missing(slug) {
 				m.notify("unknown card: " + slug)
 			} else {
 				m.preview.back = append(m.preview.back, m.preview.task.File)
@@ -172,6 +191,8 @@ func (m *Model) previewDependencies(record bool, y int) string {
 		text := slug
 		if m.deps.Missing(slug) {
 			text += "?"
+		} else if m.deps.IsArchived(slug) {
+			text += " archived"
 		}
 		w := lipgloss.Width(text)
 		if x+w > m.width && x > 6 {
@@ -182,6 +203,8 @@ func (m *Model) previewDependencies(record bool, y int) string {
 		}
 		if m.deps.Missing(slug) {
 			text = warning.Render(text)
+		} else if m.deps.IsArchived(slug) {
+			text = dim.Render(text)
 		}
 		if i == m.preview.depCursor {
 			text = lipgloss.NewStyle().Reverse(true).Render(text)

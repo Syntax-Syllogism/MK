@@ -14,30 +14,35 @@ func (m *Model) tableFields(t board.Task) []string {
 	if m.dependencyWarning(t) {
 		deps += "!"
 	}
-	return []string{m.highlightTitle(t.File), empty(t.Project), empty(t.Epic), empty(t.Status), empty(strings.Join(t.Tags, ",")), deps}
+	return []string{m.highlightTitle(t.File), m.highlightHeading(empty(t.Heading)), empty(t.Project), empty(t.Epic), empty(t.Status), empty(strings.Join(t.Tags, ",")), deps}
 }
 func (m *Model) tableView() string {
 	tasks := m.tableTasks()
-	headers := []string{"FILE", "PROJECT", "EPIC", "STATUS", "TAGS", "DEPS"}
-	widths := []int{4, 7, 4, 6, 4, 4}
+	headers := []string{"FILE", "TITLE", "PROJECT", "EPIC", "STATUS", "TAGS", "DEPS"}
+	widths := []int{4, 5, 7, 4, 6, 4, 4}
 	for _, t := range tasks {
 		for i, field := range m.tableFields(t) {
 			widths[i] = max(widths[i], lipgloss.Width(field))
 		}
 	}
-	// Reserve at least 40% for FILE, sharing the remainder across metadata.
-	available := max(6, m.width-5)
-	fileWidth := max(1, available*2/5)
-	budget := max(5, available-fileWidth)
-	for i := 1; i < 6; i++ {
-		widths[i] = min(widths[i], max(1, budget/(6-i)))
+	// Reserve at least 40% for FILE and give TITLE two metadata shares.
+	available := max(len(headers), m.width-(len(headers)-1))
+	fileWidth := max(1, (m.width*2+4)/5)
+	budget := max(len(headers)-1, available-fileWidth)
+	shares := len(headers)
+	for i := 1; i < len(headers); i++ {
+		weight := 1
+		if i == 1 {
+			weight = 2
+		}
+		widths[i] = min(widths[i], max(1, budget*weight/shares))
 		budget -= widths[i]
+		shares -= weight
 	}
-	widths[0] = max(1, available)
-	for i := 1; i < 6; i++ {
+	widths[0] = max(fileWidth, available)
+	for i := 1; i < len(headers); i++ {
 		widths[0] -= widths[i]
 	}
-	widths[0] = max(fileWidth, widths[0])
 	row := func(fields []string) string {
 		parts := make([]string, len(fields))
 		for i, f := range fields {

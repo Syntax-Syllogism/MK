@@ -18,7 +18,12 @@ type undoFile struct {
 	keys      map[string]yaml.Node
 	afterHash [32]byte
 }
+type archivedUndo struct {
+	file string
+	hash [32]byte
+}
 type undoEntry struct {
+	archived    *archivedUndo
 	file, label string
 	files       []undoFile
 }
@@ -100,6 +105,21 @@ func (m *Model) undoAction() {
 		return
 	}
 	entry := m.undo[len(m.undo)-1]
+	if entry.archived != nil {
+		m.undo = m.undo[:len(m.undo)-1]
+		if err := m.store.Unarchive(entry.archived.file, entry.archived.hash); err != nil {
+			m.actionError(fmt.Errorf("can't undo: %s changed or name taken", entry.file))
+			return
+		}
+		if err := m.store.Scan(); err != nil {
+			m.actionError(err)
+			return
+		}
+		m.reload()
+		m.focusFile(entry.file)
+		m.notify("undid archive")
+		return
+	}
 	requests := make([]board.UpdateRequest, 0, len(entry.files))
 	for _, file := range entry.files {
 		data, err := os.ReadFile(filepath.Join(m.snap.Dir, file.file))

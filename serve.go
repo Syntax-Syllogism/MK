@@ -167,10 +167,11 @@ func (s *server) handleBoard(w http.ResponseWriter, r *http.Request) {
 	snapshot := s.store.Snapshot()
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(struct {
-		Columns []string     `json:"columns"`
-		Tasks   []board.Task `json:"tasks"`
-		DocsDir string       `json:"docsDir"`
-	}{snapshot.Columns, snapshot.Tasks, snapshot.Dir})
+		Columns  []string        `json:"columns"`
+		Tasks    []board.Task    `json:"tasks"`
+		DocsDir  string          `json:"docsDir"`
+		Archived map[string]bool `json:"archived"`
+	}{snapshot.Columns, snapshot.Tasks, snapshot.Dir, snapshot.Archived})
 }
 func serveIndex(w http.ResponseWriter, r *http.Request) {
 	data, err := indexHTML.ReadFile("index.html")

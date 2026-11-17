@@ -4,6 +4,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/Syntax-Syllogism/mk/internal/board"
 	"github.com/charmbracelet/x/ansi"
+	"strings"
 	"testing"
 )
 
@@ -142,5 +143,33 @@ func TestSearchBodyCacheInvalidation(t *testing.T) {
 	reload(t, m)
 	if len(m.tableTasks()) != 0 {
 		t.Fatal("same-length body edit must invalidate cache")
+	}
+}
+
+func TestSearchHeadingHighlightAndRanking(t *testing.T) {
+	m := newTestModel(t)
+	m.filter.Query = "initproj"
+	task := board.Task{File: "setup.md", Title: "setup", Heading: "Initialize Project"}
+	if got := m.highlightHeading(task.Heading); got == task.Heading || ansi.Strip(got) != task.Heading {
+		t.Fatalf("heading highlight missing: %q", got)
+	}
+	if got := m.highlightTitle(task.File); got != task.File {
+		t.Fatal("unmatched filename must not highlight")
+	}
+	if got := m.highlightHeading("initproj.md"); !strings.Contains(got, ".md") {
+		t.Fatal("heading extension is literal text")
+	}
+	for i := range m.snap.Tasks {
+		m.snap.Tasks[i].Title = "Initialize Project"
+		m.snap.Tasks[i].Heading = ""
+	}
+	m.snap.Tasks[1].Heading = "initproj"
+	tasks := m.tableTasks()
+	if tasks[0].File != m.snap.Tasks[1].File {
+		t.Fatal("better heading score must rank first")
+	}
+	m.filter.Query = "Project"
+	if m.highlightHeading(task.Heading) == task.Heading {
+		t.Fatal("heading term must highlight")
 	}
 }

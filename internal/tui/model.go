@@ -52,7 +52,10 @@ type Model struct {
 	scroll                      map[string]int
 	tableCur                    string
 	tableScroll                 int
-	filterRow, filterChip       int
+	filterRow                   int
+	filterFocus                 [3]string
+	filterScroll                [3]int
+	filterFind                  *textinput.Model
 	preview                     previewState
 	overlay                     viewport.Model
 	prefs                       Prefs
@@ -67,6 +70,7 @@ type Model struct {
 	toastError                  bool
 	grab                        *grabState
 	tags                        *tagState
+	palette                     *paletteState
 	undo                        []undoEntry
 	search                      *textinput.Model
 	noMouse                     bool
@@ -89,6 +93,8 @@ func NewModel(store *board.Store, opts Options) *Model {
 	}
 	m.overlay = viewport.New()
 	m.preview.viewport = viewport.New()
+	m.overlay.KeyMap = pagerKeys()
+	m.preview.viewport.KeyMap = pagerKeys()
 	m.reload()
 	return m
 }
@@ -194,7 +200,7 @@ func (m *Model) reload() {
 	}
 	m.bodyCache = cache
 	m.sections = board.Sections(m.snap)
-	m.deps = board.AnalyzeDeps(m.snap.Tasks)
+	m.deps = board.AnalyzeDeps(m.snap.Tasks, m.snap.Archived)
 	m.pruneFilters()
 	m.focusSec = max(0, min(m.focusSec, len(m.sections)-1))
 	for i, s := range m.sections {
@@ -204,7 +210,7 @@ func (m *Model) reload() {
 		m.selected[s.Name] = selectedFile(m.visible(s.Name), m.selected[s.Name], indices[s.Name])
 	}
 	m.tableCur = selectedFile(m.tableTasks(), m.tableCur, tableIndex)
-	if m.mode == modePreview {
+	if m.mode == modePreview || (m.mode == modeHelp && m.overlayMode == modePreview) {
 		m.refreshPreview()
 	}
 	m.refreshGrab()
@@ -277,6 +283,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = max(1, msg.Width)
 		m.height = max(1, msg.Height)
+		if m.filterFind != nil {
+			m.filterFind.SetWidth(max(1, m.width-14))
+		}
+		m.ensureFilterFocus()
 		if m.search != nil {
 			m.search.SetWidth(max(1, m.width-3))
 		}
@@ -309,9 +319,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, pulse()
 	case tea.MouseMsg:
-		m.updateMouse(msg)
+		if m.palette == nil || m.mode == modeHelp {
+			m.updateMouse(msg)
+		}
 	case tea.KeyPressMsg:
 		k := msg.String()
+		if m.palette != nil && m.mode != modeHelp && k != "?" {
+			return m.updatePalette(msg)
+		}
 		if m.mode == modeHelp || m.mode == modeLogs {
 			if k == "ctrl+c" {
 				if m.grab != nil {
@@ -342,6 +357,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.overlay.GotoTop()
 			return m, nil
 		}
+		if m.mode == modePreview && m.preview.find != nil {
+			return m, m.updatePreviewFind(msg)
+		}
+		if m.filterFind != nil {
+			return m, m.updateFilterFind(msg)
+		}
+		if m.mode == modeFilter && (k == "/" || k == "ctrl+f") {
+			return m, m.startFilterFind()
+		}
 		if m.search != nil {
 			return m, m.updateSearch(msg)
 		}
@@ -351,6 +375,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.grab != nil {
 			m.updateGrab(k)
 			return m, nil
+		}
+		if k == ":" {
+			return m, m.startPalette()
 		}
 		if k == "ctrl+c" {
 			return m, tea.Quit
@@ -370,6 +397,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.mode == modePreview {
 			switch k {
+			case "A":
+				m.archiveCard(m.preview.task.File)
+				return m, nil
+			case "u":
+				m.undoAction()
+				return m, nil
 			case "t":
 				return m, m.startTags(m.preview.task.File)
 			case "e":
@@ -381,7 +414,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.mode == modeBoard || m.mode == modeTable {
 			switch k {
-			case "/":
+			case "A":
+				m.archiveCard(m.currentFile())
+				return m, nil
+			case "c":
+				if m.mode == modeBoard {
+					m.toggleColumn()
+				}
+				return m, nil
+			case "/", "ctrl+f":
 				return m, m.startSearch()
 			case "esc":
 				m.filter.Query = ""
@@ -417,7 +458,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "F":
 			m.clearFilters()
 			m.repairSelection()
-		case "ctrl+f":
+			if m.mode == modeFilter {
+				m.ensureFilterFocus()
+			}
+		case "p":
 			m.prefs.FiltersCollapsed = !m.prefs.FiltersCollapsed
 			if m.mode == modeFilter && m.prefs.FiltersCollapsed {
 				m.mode = m.prevMode
@@ -429,6 +473,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else {
 				m.prevMode = m.mode
 				m.mode = modeFilter
+				m.ensureFilterFocus()
 				m.prefs.FiltersCollapsed = false
 				savePrefs(m.prefsFile, m.prefs)
 			}
@@ -453,9 +498,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.prefs.Compact = !m.prefs.Compact
 				savePrefs(m.prefsFile, m.prefs)
 			case "h", "left":
-				m.focusSec = max(0, m.focusSec-1)
+				m.moveSection(-1)
 			case "l", "right":
-				m.focusSec = max(0, min(len(m.sections)-1, m.focusSec+1))
+				m.moveSection(1)
 			case "enter":
 				if file := m.currentFile(); file != "" {
 					m.prevMode = m.mode
@@ -468,6 +513,21 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 	default:
+		if m.palette != nil && m.mode != modeHelp {
+			old := m.palette.input.Value()
+			var cmd tea.Cmd
+			m.palette.input, cmd = m.palette.input.Update(msg)
+			if old != m.palette.input.Value() {
+				m.palette.cursor = 0
+			}
+			return m, cmd
+		}
+		if m.mode == modePreview && m.preview.find != nil {
+			return m, m.updatePreviewFindInput(msg)
+		}
+		if m.filterFind != nil && m.mode != modeHelp {
+			return m, m.updateFilterFindInput(msg)
+		}
 		if m.search != nil {
 			return m, m.updateSearchInput(msg)
 		}
@@ -503,11 +563,11 @@ func (m *Model) sizeOverlay() { m.overlay.SetWidth(m.width); m.overlay.SetHeight
 func (m *Model) rescan() tea.Cmd {
 	store, logs := m.store, m.logs
 	return func() tea.Msg {
-		if err := store.Scan(); err != nil {
-			logs.Logf("Scan: %v", err)
-		}
 		if err := store.ReloadConfig(); err != nil {
 			logs.Logf("Config: %v", err)
+		}
+		if err := store.Scan(); err != nil {
+			logs.Logf("Scan: %v", err)
 		}
 		return reloadMsg{}
 	}

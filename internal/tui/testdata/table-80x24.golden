@@ -1,24 +1,24 @@
 MK // /tasks                                            table  filters (0)  test
 PROJECTS: [MK]
 EPICS: [CORE] [NO EPIC] [QA] [SETUP] [UI]
-TAGS: [analytics] [backend] [choco] [copy] [css] [design] [docs] [frontend] [go]
-[incident] [marketing] [mobile] [postmortem] [process] [qa] [smoke-test] [ui]
-FILE                                  PROJECT EPIC  STATUS      TAGS        DEPS
-resolve_merge_conflict_in_onboarding… -       -     CONFLICT    -           0
-test_frontend.md                      MK      UI    TODO        frontend,c… 0
-read_prd.md                           MK      CORE  TODO        docs        0
-wire_up_analytics_events.md           MK      QA    TODO        analytics,… 0
-polish_mobile_nav_transitions.md      MK      QA    TODO        design,mob… 0
-setup_backend.md                      MK      SETUP IN PROGRESS backend,go  0
-writeup_deploy_incident_postmortem.md MK      QA    UNDER REVI… incident,p… 0
-draft_pricing_page_copy.md            MK      QA    UNDER REVI… marketing,… 0
-design_frontend.md                    MK      UI    DONE        frontend,c… 0
-design_empty_state_illustration.md    MK      QA    DONE        design,ui   0
-document_smoke_test_plan.md           MK      QA    DONE        qa,smoke-t… 0
-verify_status_after_board_rename.md   MK      QA    REVIEW      process     0
-capture_customer_feedback_notes.md    -       -     -           -           0
-draft_changelog_for_v2_release.md     -       -     -           -           0
-migrate_legacy_priority_field.md      -       -     -           -           0
-spike_notification_service.md         -       -     -           -           0
+TAGS: [analytics] [backend] [choco] [copy] [css] [design] [docs]
+[frontend] [go] [incident] [marketing] [mobile] [postmortem] [process]        ↓4
+FILE                                TITLE        PROJE… EPIC  STATUS TAGS   DEPS
+resolve_merge_conflict_in_onboardi… -            -      -     CONFL… -      0
+test_frontend.md                    Design Fron… MK     UI    TODO   front… 0
+read_prd.md                         Read PRD     MK     CORE  TODO   docs   0
+wire_up_analytics_events.md         Wire Up Boa… MK     QA    TODO   analy… 0
+polish_mobile_nav_transitions.md    Polish Mobi… MK     QA    TODO   desig… 0
+setup_backend.md                    Initialize … MK     SETUP IN PR… backe… 0
+writeup_deploy_incident_postmortem… Write Up th… MK     QA    UNDER… incid… 0
+draft_pricing_page_copy.md          Draft Prici… MK     QA    UNDER… marke… 0
+design_frontend.md                  Design Fron… MK     UI    DONE   front… 0
+design_empty_state_illustration.md  Design the … MK     QA    DONE   desig… 0
+document_smoke_test_plan.md         Document th… MK     QA    DONE   qa,sm… 0
+verify_status_after_board_rename.md Verify Tick… MK     QA    REVIEW proce… 0
+capture_customer_feedback_notes.md  Capture Cus… -      -     -      -      0
+draft_changelog_for_v2_release.md   Draft Chang… -      -     -      -      0
+migrate_legacy_priority_field.md    Migrate Leg… -      -     -      -      0
+spike_notification_service.md       Spike: Noti… -      -     -      -      0
 
-j/k ↓/↑ card / row / scroll • g/G first / last • ctrl+d/u half page • ? help
+/ search · enter preview · t tags · e edit · u undo · f filters · ? help

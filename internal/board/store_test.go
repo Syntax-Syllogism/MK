@@ -1,6 +1,7 @@
 package board
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -8,6 +9,58 @@ import (
 	"sync"
 	"testing"
 )
+
+func TestScanPublishesTasksDespiteArchiveError(t *testing.T) {
+	for _, kind := range []string{"symlink", "non-directory"} {
+		t.Run(kind, func(t *testing.T) {
+			dir := t.TempDir()
+			cache := filepath.Join(t.TempDir(), "board.json")
+			archive := filepath.Join(dir, "archive")
+			if kind == "symlink" {
+				if err := os.Symlink(t.TempDir(), archive); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				writeTaskFile(t, dir, "archive", "not a directory")
+			}
+			writeTaskFile(t, dir, "card.md", "---\nstatus: TODO\n---\nbody")
+			var warnings []string
+			s, err := Open(dir, Options{CachePath: cache, Logf: func(format string, args ...any) {
+				warnings = append(warnings, fmt.Sprintf(format, args...))
+			}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(strings.Join(warnings, "\n"), "Archive scan error:") {
+				t.Fatalf("Open did not report archive error: %v", warnings)
+			}
+			checkTasks := func(wantStatus string) {
+				t.Helper()
+				tasks := s.Snapshot().Tasks
+				if len(tasks) != 1 || tasks[0].File != "card.md" || tasks[0].Status != wantStatus {
+					t.Fatalf("snapshot tasks = %+v, want card.md with status %s", tasks, wantStatus)
+				}
+				data, err := os.ReadFile(cache)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var cached []Task
+				if err := json.Unmarshal(data, &cached); err != nil {
+					t.Fatal(err)
+				}
+				if len(cached) != 1 || cached[0].File != "card.md" || cached[0].Status != wantStatus {
+					t.Fatalf("cached tasks = %+v, want card.md with status %s", cached, wantStatus)
+				}
+			}
+			checkTasks("TODO")
+			writeTaskFile(t, dir, "card.md", "---\nstatus: DONE\n---\nupdated")
+			if err := s.Scan(); err == nil {
+				t.Fatal("Scan did not report archive error")
+			}
+			checkTasks("DONE")
+		})
+	}
+}
 
 func TestTaskPathAcceptsFlatFilenames(t *testing.T) {
 	path, err := (&Store{dir: "docs"}).TaskPath("notes..draft.md")

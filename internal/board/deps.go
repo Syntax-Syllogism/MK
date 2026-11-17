@@ -1,13 +1,17 @@
 package board
 
 // DepInfo describes known dependency targets and files belonging to cycles.
-type DepInfo struct{ Known, Cycles map[string]bool }
+type DepInfo struct{ Known, Cycles, Archived map[string]bool }
 
-func (d DepInfo) Missing(slug string) bool { return !d.Known[slug+".md"] }
+func (d DepInfo) Missing(slug string) bool    { return !d.Known[slug+".md"] && !d.IsArchived(slug) }
+func (d DepInfo) IsArchived(slug string) bool { return !d.Known[slug+".md"] && d.Archived[slug+".md"] }
 
 // AnalyzeDeps uses Tarjan's strongly connected components algorithm. Missing edges are ignored.
-func AnalyzeDeps(tasks []Task) DepInfo {
+func AnalyzeDeps(tasks []Task, archived ...map[string]bool) DepInfo {
 	result := DepInfo{Known: map[string]bool{}, Cycles: map[string]bool{}}
+	if len(archived) > 0 {
+		result.Archived = archived[0]
+	}
 	byFile := map[string]Task{}
 	for _, t := range tasks {
 		result.Known[t.File] = true

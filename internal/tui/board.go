@@ -71,6 +71,8 @@ func (m *Model) dependencyLine(t board.Task, cursor int) string {
 		s := slug
 		if m.deps.Missing(slug) {
 			s = warning.Render(slug + "?")
+		} else if m.deps.IsArchived(slug) {
+			s = dim.Render(slug + " archived")
 		}
 		if i == cursor {
 			s = lipgloss.NewStyle().Reverse(true).Render(s)
@@ -95,7 +97,11 @@ func (m *Model) card(t board.Task, w int, selected bool) string {
 				badge = danger.Render(badge)
 			}
 		}
-		lines = []string{title, ansi.Truncate(badge+dim.Render(tags), inner, "…")}
+		lines = []string{title}
+		if t.Heading != "" {
+			lines = append(lines, dim.Render(ansi.Truncate(m.highlightHeading(t.Heading), inner, "…")))
+		}
+		lines = append(lines, ansi.Truncate(badge+dim.Render(tags), inner, "…"))
 	} else {
 		ep := dim.Render(epic(t))
 		if t.ParseError != "" || t.Status == board.StatusConflict {
@@ -103,7 +109,11 @@ func (m *Model) card(t board.Task, w int, selected bool) string {
 		}
 		wrapped := strings.Split(lipWrap(m.highlightTitle(t.File), inner), "\n")
 		wrapped = wrapped[:min(2, len(wrapped))]
-		lines = []string{dim.Render(strings.ToUpper(empty(t.Project))), ep, accent.Bold(true).Render(strings.Join(wrapped, "\n")), dim.Render(ansi.Truncate(tags, inner, "…")), ansi.Truncate(m.dependencyLine(t, -1), inner, "…")}
+		lines = []string{dim.Render(strings.ToUpper(empty(t.Project))), ep, accent.Bold(true).Render(strings.Join(wrapped, "\n"))}
+		if t.Heading != "" {
+			lines = append(lines, dim.Render(ansi.Truncate(m.highlightHeading(t.Heading), inner, "…")))
+		}
+		lines = append(lines, dim.Render(ansi.Truncate(tags, inner, "…")), ansi.Truncate(m.dependencyLine(t, -1), inner, "…"))
 	}
 	style := lipgloss.NewStyle().Width(w).Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.ANSIColor(8))
 	if selected {
@@ -125,7 +135,7 @@ func (m *Model) card(t board.Task, w int, selected bool) string {
 	return style.Render(strings.Join(lines, "\n"))
 }
 func (m *Model) boardView() string {
-	first, count, width := layoutColumns(m.width, len(m.sections), m.focusSec)
+	first, count, width := layoutColumns(m.width, len(m.sections), m.focusSec, m.collapsedColumns())
 	height := m.contentHeight()
 	var columns []string
 	x := 0
@@ -133,11 +143,25 @@ func (m *Model) boardView() string {
 	if filters := m.filterView(); filters != "" {
 		y += lineCount(filters)
 	}
+	used := count - 1
+	firstExpanded := -1
+	for i := first; i < first+count; i++ {
+		if m.collapsed(m.sections[i].Name) {
+			used += 5
+		} else {
+			used += width
+			if firstExpanded < 0 {
+				firstExpanded = i
+			}
+		}
+	}
 	for i := first; i < first+count; i++ {
 		s := m.sections[i]
 		w := width
-		if i == first {
-			w += max(0, m.width-(count*width+count-1))
+		if m.collapsed(s.Name) {
+			w = min(5, m.width)
+		} else if i == firstExpanded {
+			w += max(0, m.width-used)
 		}
 		tasks := m.visible(s.Name)
 		total := 0
@@ -172,7 +196,17 @@ func (m *Model) boardView() string {
 		m.renderX = x
 		m.renderY = y + 1
 		m.addHit(rect{x, y, w, height}, hit{kind: hitColumn, section: s.Name})
-		body := m.columnCards(s.Name, tasks, w, max(0, height-1))
+		body := ""
+		if m.collapsed(s.Name) {
+			label = string([]rune(s.Name)[:min(3, len([]rune(s.Name)))])
+			body = dim.Render(fmt.Sprint(len(tasks)))
+			if m.grab != nil && m.grab.targetSec == s.Name {
+				header = accent.Reverse(true)
+				body = header.Render(fmt.Sprint(len(tasks)))
+			}
+		} else {
+			body = m.columnCards(s.Name, tasks, w, max(0, height-1))
+		}
 		columns = append(columns, lipgloss.NewStyle().Width(w).Render(fitScreen(header.Render(label)+"\n"+body, w, height)))
 		x += w + 1
 	}
@@ -282,11 +316,9 @@ func (m *Model) View() tea.View {
 	if m.width < 60 {
 		status = ""
 	}
-	if len(m.undo) > 0 {
-		status += fmt.Sprintf("  u undo (%d)", len(m.undo))
-	}
+	status += m.undoHint()
 	if m.grab != nil {
-		status = fmt.Sprintf("MOVING %s → %s #%d   enter drop · esc cancel", m.grab.file, m.grab.targetSec, m.grab.targetIdx+1)
+		top = fmt.Sprintf("MOVING %s → %s #%d", m.grab.file, m.grab.targetSec, m.grab.targetIdx+1)
 	}
 	if time.Now().Before(m.toastUntil) {
 		status = warning.Render(m.toast)
@@ -318,8 +350,18 @@ func (m *Model) View() tea.View {
 		popup := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(1).Render(m.tagsView())
 		body = lipgloss.Place(m.width, max(0, m.height-2), lipgloss.Center, lipgloss.Center, popup)
 	}
+	if m.palette != nil && m.mode != modeHelp && m.mode != modeLogs {
+		popup := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(0, 1).Render(m.paletteView())
+		body = lipgloss.Place(m.width, max(0, m.height-2), lipgloss.Center, lipgloss.Center, popup)
+	}
 	if m.search != nil && m.mode != modeHelp && m.mode != modeLogs {
 		status = m.search.View()
+	}
+	if m.filterFind != nil && m.mode == modeFilter {
+		status = m.filterFind.View()
+	}
+	if m.mode == modePreview && m.preview.find != nil {
+		status = m.previewFindStatus()
 	}
 	screen := fitScreen(top, m.width, 1) + "\n" + fitScreen(body, m.width, max(0, m.height-2)) + "\n" + fitScreen(status, m.width, 1)
 	v := tea.NewView(fitScreen(screen, m.width, m.height))

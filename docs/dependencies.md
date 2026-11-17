@@ -45,3 +45,15 @@ entries.
 - Dependencies do not affect columns or moves. A task can move to `DONE` while
   its dependencies are still open.
 - MK does not write `depends_on` for you. You maintain it by hand.
+
+## Archived dependencies
+
+The terminal board treats Markdown filenames in the configured archive folder
+as known dependencies. They appear dimmed with `archived`; following one shows
+`archived: <slug>`. Archived files do not participate in dependency cycles.
+Only the archive folder's top level is checked, without parsing its files.
+Changes made solely inside the archive folder appear after `r` or another
+board rescan.
+
+The web board still marks archived dependencies as missing; matching its
+behavior to the terminal board is a follow-up.

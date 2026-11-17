@@ -65,3 +65,15 @@ Then edit those files, or drag the cards to the new column on the web board.
 
 To update many files at once, use your editor's search and replace on the
 `status:` lines.
+
+## Archive directory
+
+`archive_dir:` in `.kanban.yml` chooses where the terminal board's `A` action
+moves cards. It defaults to `archive`. Nested relative paths such as
+`done/archive` are allowed. Paths are cleaned and must stay inside the task
+folder: absolute paths, `.`, paths starting with `..`, and any `..` segment
+are rejected. An invalid value logs a warning and keeps the last valid setting,
+falling back to `archive`. Symlinked archive directories are refused.
+
+The folder is created on first archive. Existing names are never intentionally
+overwritten. See [card actions](terminal-ui.md#card-actions) for archive and undo.

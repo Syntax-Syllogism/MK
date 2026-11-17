@@ -12,17 +12,18 @@ type grabState struct {
 	origIndex, targetIdx     int
 }
 
-func (m *Model) writable(file string) bool {
+func (m *Model) writable(file string) bool { return m.writableFor(file, "move") }
+func (m *Model) writableFor(file, verb string) bool {
 	t, ok := m.task(file)
 	if !ok {
 		return false
 	}
 	if t.Status == board.StatusConflict {
-		m.actionError(fmt.Errorf("can't move a conflicted card, press e to fix it"))
+		m.actionError(fmt.Errorf("can't %s a conflicted card, press e to fix it", verb))
 		return false
 	}
 	if t.ParseError != "" {
-		m.actionError(fmt.Errorf("can't move a card with a parse error, press e to fix it"))
+		m.actionError(fmt.Errorf("can't %s a card with a parse error, press e to fix it", verb))
 		return false
 	}
 	return true
@@ -119,6 +120,12 @@ func (m *Model) updateGrab(key string) {
 	case "G":
 		g.targetIdx = n
 	case "enter":
+		if m.collapsed(g.targetSec) {
+			if m.drop(g.file, g.targetSec, "", lastFile(m.fullColumn(g.targetSec, g.file))) {
+				m.grab = nil
+			}
+			return
+		}
 		t, _ := m.task(g.file)
 		if board.Section(t, m.snap.Columns) == g.targetSec && fileIndex(m.visible(g.targetSec), g.file) == g.targetIdx {
 			m.grab = nil

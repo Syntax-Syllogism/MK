@@ -117,13 +117,109 @@ func TestColumnScrolling(t *testing.T) {
 	}
 }
 
-func TestCompactCardHasTwoContentLines(t *testing.T) {
+func TestCardHeading(t *testing.T) {
 	m := newTestModel(t)
-	task := board.Task{File: "a-very-long-filename-that-needs-truncation.md", Tags: []string{"a-very-long-tag-that-needs-truncation"}}
-	for _, selected := range []bool{false, true} {
-		card := m.card(task, 26, selected)
-		if lineCount(card) != 4 || ansi.StringWidth(strings.Split(ansi.Strip(card), "\n")[0]) != 26 {
-			t.Fatalf("compact card must have two content lines inside its border: %q", ansi.Strip(card))
+	for _, compact := range []bool{true, false} {
+		m.prefs.Compact = compact
+		for _, selected := range []bool{false, true} {
+			for _, width := range []int{26, 60} {
+				task := board.Task{File: "task.md", Tags: []string{"tag"}}
+				before := m.card(task, width, selected)
+				task.Heading = "Readable heading"
+				card := m.card(task, width, selected)
+				if lineCount(card) != lineCount(before)+1 {
+					t.Fatal("heading adds exactly one line")
+				}
+				if compact && lineCount(before) != 4 {
+					t.Fatal("heading-free compact card keeps two content lines")
+				}
+				lines := strings.Split(ansi.Strip(card), "\n")
+				for i, line := range lines {
+					if ansi.StringWidth(line) != width {
+						t.Fatalf("wrong card width: %q", line)
+					}
+					if strings.Contains(line, task.File) && !strings.Contains(lines[i+1], task.Heading) {
+						t.Fatal("heading must follow filename")
+					}
+				}
+				task.Heading = strings.Repeat("Long heading ", 10)
+				if lineCount(m.card(task, width, selected)) != lineCount(card) {
+					t.Fatal("heading must truncate, never wrap")
+				}
+			}
+		}
+	}
+}
+
+func TestMixedCardHeightsScrollAndMouse(t *testing.T) {
+	m := newTestModel(t)
+	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m.prefs.FiltersCollapsed = true
+	tasks := []board.Task{
+		{File: "first.md", Heading: "First heading"},
+		{File: "second.md"},
+		{File: "third.md", Heading: "Third heading"},
+		{File: "fourth.md"},
+		{File: "fifth.md", Heading: "Fifth heading"},
+	}
+	for i := range tasks {
+		tasks[i].Status = "TODO"
+		order := float64(i)
+		tasks[i].Order = &order
+	}
+	m.snap.Tasks = tasks
+	m.selected["TODO"] = tasks[0].File
+	m.View()
+	var third region
+	for _, r := range m.layout.hits {
+		if r.h.file == "third.md" {
+			third = r
+		}
+	}
+	if third.h.file == "" {
+		t.Fatal("third card must be visible")
+	}
+	// Click the last content line, which moves down when earlier cards have headings.
+	m.Update(tea.MouseClickMsg{X: third.r.x + 1, Y: third.r.y + third.r.h - 2, Button: tea.MouseLeft})
+	if m.currentFile() != "third.md" {
+		t.Fatal("mixed-height click must select third card")
+	}
+	for _, compact := range []bool{true, false} {
+		m.prefs.Compact = compact
+		for _, task := range tasks {
+			m.selected["TODO"] = task.File
+			m.View()
+			found := false
+			for _, r := range m.layout.hits {
+				if r.h.kind == hitCard && r.h.file == task.File {
+					found = true
+					if r.r.h != lineCount(m.card(task, r.r.w, true)) {
+						t.Fatalf("selected card clipped: %s", task.File)
+					}
+				}
+			}
+			if !found {
+				t.Fatalf("selected card hidden: %s", task.File)
+			}
+		}
+	}
+}
+
+func TestTableHeadingColumn(t *testing.T) {
+	m := newTestModel(t)
+	m.snap.Tasks[0].Heading = "Readable heading"
+	fields := m.tableFields(m.snap.Tasks[0])
+	if ansi.Strip(fields[0]) != "a.md" || ansi.Strip(fields[1]) != "Readable heading" {
+		t.Fatalf("fields: %v", fields)
+	}
+	for _, width := range []int{80, 160} {
+		m.Update(tea.WindowSizeMsg{Width: width, Height: 24})
+		header := strings.Split(ansi.Strip(m.tableView()), "\n")[0]
+		if !strings.HasPrefix(header, "FILE") || strings.Index(header, "TITLE") < (width*2+4)/5 {
+			t.Fatalf("FILE floor lost: %q", header)
+		}
+		if ansi.StringWidth(header) != width {
+			t.Fatalf("table width: %q", header)
 		}
 	}
 }

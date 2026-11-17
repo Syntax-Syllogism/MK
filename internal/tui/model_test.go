@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -226,11 +227,11 @@ func TestPreferencesKeys(t *testing.T) {
 	m := newTestModel(t)
 	press(m, "v")
 	press(m, "z")
-	press(m, "ctrl+f")
+	press(m, "p")
 	if m.mode != modeTable || m.prefs.View != "table" || m.prefs.Compact || !m.prefs.FiltersCollapsed {
 		t.Fatalf("prefs: %+v", m.prefs)
 	}
-	if got := loadPrefs(m.prefsFile); got != m.prefs {
+	if got := loadPrefs(m.prefsFile); !reflect.DeepEqual(got, m.prefs) {
 		t.Fatal("prefs not persisted")
 	}
 }
@@ -303,11 +304,11 @@ func TestReadOnlyKeysDoNotWriteTasks(t *testing.T) {
 	for _, mode := range []string{"board", "table", "preview", "filters", "search", "help"} {
 		for _, k := range keys {
 			// Quick moves deliberately write tasks on the board. Editor handoff
-			// can write externally in board/table/preview; it is text in search.
+			// and archive can write in board/table/preview; both are text in search.
 			if mode == "board" && (k == "H" || k == "L" || k == "J" || k == "K") {
 				continue
 			}
-			if k == "e" && (mode == "board" || mode == "table" || mode == "preview") {
+			if (k == "e" || k == "A") && (mode == "board" || mode == "table" || mode == "preview") {
 				continue
 			}
 			t.Run(mode+"/"+k, func(t *testing.T) {

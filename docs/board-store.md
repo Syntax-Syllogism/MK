@@ -11,7 +11,8 @@ embeds the frontend and dispatches to `runServe` in `serve.go` by default, or to
 watcher, and uses the task-writing API for card actions.
 
 Both front ends must keep the same task-file rules. Writes go through
-`Store.Apply` or its batch methods, never around them.
+`Store.Apply` or its batch methods, never around them. The one exception is the
+archive move, which renames an unchanged file; see [Archive moves](#archive-moves).
 
 ## Opening and reading
 
@@ -28,8 +29,8 @@ uses `.kanban/board.json`. `Logf` receives warnings; nil falls back to `log.Prin
 The cache is write-only derived output, never the source of task state.
 
 `Store.Dir()` returns the absolute directory. `Store.Snapshot()` returns
-independent copies of columns, tasks, tags, dependencies, and order pointers.
-Consumers can modify them without changing the store. `Scan`, `ReloadConfig`,
+independent copies of columns, tasks, tags, dependencies, order pointers, and
+archived filenames. Consumers can modify them without changing the store. `Scan`, `ReloadConfig`,
 and `Apply` serialize their I/O; a separate read/write lock protects state.
 
 `Scan()` reads top-level `.md` files in filename order. Unreadable files are
@@ -38,6 +39,14 @@ and its real body, so the card remains visible. `ParseTask(path)` can also be
 used directly. Conflict detection takes precedence over YAML parsing. After
 replacing the in-memory tasks, a scan writes the configured cache, if enabled.
 Cache failures are returned even though the in-memory scan has completed.
+
+`Scan()` also lists top-level `.md` names in the archive folder into
+`Snapshot.Archived`, without parsing them. `ArchiveDir()` returns the configured
+`archive_dir`, or `archive` when unset. A missing archive folder is empty. If
+the archive path has a symlink or a non-directory component, `Scan` returns an
+error but still publishes and caches the top-level tasks. Archive read errors
+behave the same way; archived names are unavailable for that scan. `Open` logs
+the error and continues with the scanned tasks.
 
 Config bootstrapping happens only at open. `ReloadConfig()` never rewrites config;
 missing or empty/unusable columns retain previous columns, or use
@@ -86,12 +95,33 @@ other than status/order/tags. These fields are not exposed by HTTP.
 `FrontmatterKeys(path)` returns top-level YAML nodes using `ParseTask`'s delimiter
 rules, retaining the distinction between missing keys and explicit empty values.
 
+## Archive moves
+
+`Store.Archive(file, expected)` and `Store.Unarchive(file, expected)` are the
+non-`Apply` write path. They rename an unchanged `.md` file between the task
+folder and the archive folder, and the TUI uses them for `A` and its undo. They
+do not change file content, so `Restore` and `ExpectedHash` are not involved.
+
+- Both hold the store I/O lock. `expected` is the SHA-256 of the file's current
+  bytes. A mismatch returns `ErrChanged`; a non-regular source returns
+  `ErrInvalidFile`.
+- `Archive` reparses the file on disk and refuses CONFLICT and parse-error cards,
+  even if the caller's snapshot is stale.
+- The archive folder is created on first use. A symlink or non-directory in the
+  archive path is refused.
+- A destination that already exists returns `name taken`. The check is a stat
+  followed by `os.Rename`, so an external writer can still race it.
+- Neither call updates the in-memory tasks or the cache. Callers run `Scan`
+  afterwards.
+
 ## Watching
 
 `Store.Watch(ctx, onChange)` attaches fsnotify to the task directory and blocks
 until cancellation or watcher termination. Start it after `Open`. It watches
 Write/Create/Remove/Rename events for `.md` and `.kanban.yml`, with a 50 ms
-trailing debounce. Each flush runs a pending scan and/or config reload once,
+trailing debounce. The archive folder is not watched, so changes made only inside
+it appear after a rescan (`r` in the TUI). Each flush reloads config first if a
+`.kanban.yml` event arrived, then scans once if any `.md` or config event arrived,
 then invokes `onChange` synchronously, even if an operation logged an error.
 Keep the callback short. A nil callback is allowed; cancellation returns nil
 and closes the watcher. Watcher creation/attachment errors are returned;
@@ -122,13 +152,16 @@ JavaScript; the Go helpers are available for additional consumers.
 - `Filter` combines true selections with OR within project/epic/tag groups
   and AND across groups. False map values are unselected. `Active` counts
   selected chips plus one for a nonblank query; `Visible` tests a task.
-  `Query` ANDs whitespace-separated terms using fuzzy titles or substrings in
-  metadata/body; the web leaves it empty. `Score` ranks title matches, and
-  `MatchesQuery` accepts a cached lowercase body for the terminal consumer. `NoEpic` (`NO EPIC`) matches empty
-  epic. `Facets` returns sorted unique values, omitting empty projects.
-- `AnalyzeDeps` returns filename-keyed `Known` and `Cycles` maps. Tarjan's
-  strongly connected components mark only cycle members (including self-loops),
-  ignoring missing edges. `DepInfo.Missing(slug)` checks `slug + ".md"`.
+  `Query` ANDs whitespace-separated terms using fuzzy `Title` or `Heading`
+  matches, or substrings in metadata/body; the web leaves it empty. `Score` sums
+  each term's best `Title` or `Heading` match, and `MatchesQuery` accepts a
+  cached lowercase body for the terminal consumer. `NoEpic` (`NO EPIC`) matches
+  empty epic. `Facets` returns sorted unique values, omitting empty projects.
+- `AnalyzeDeps(tasks, archived...)` returns filename-keyed `Known`, `Cycles`, and
+  `Archived` maps. Tarjan's strongly connected components mark only cycle members
+  (including self-loops), ignoring missing edges. `DepInfo.Missing(slug)` checks
+  `slug + ".md"`. `DepInfo.IsArchived(slug)` is true for an unknown slug whose
+  `.md` is in the archive folder, and `Missing` is false for those slugs.
 
 ## HTTP and SSE
 
@@ -136,7 +169,9 @@ The web adapter is in `serve.go`. The endpoints are documented in the
 [HTTP API](http-api.md) reference.
 
 Each `server` owns a store and its SSE clients; no board/config/client state is
-package-global. `/api/board` serves `{columns, tasks, docsDir}` from a snapshot.
+package-global. `/api/board` serves `{columns, tasks, docsDir, archived}` from a
+snapshot. `archived` carries the archive-folder filenames. The web board does not
+use it yet, so archived dependencies still show as missing there.
 `POST /api/update` decodes `file`, `content`, `status`, `order`, and `tags` into
 `UpdateRequest`; `unset` is not exposed by HTTP.
 

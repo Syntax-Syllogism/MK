@@ -1,24 +1,24 @@
 MK // /tasks                                            board  filters (0)  test
 PROJECTS: [MK]
 EPICS: [CORE] [NO EPIC] [QA] [SETUP] [UI]
-TAGS: [analytics] [backend] [choco] [copy] [css] [design] [docs] [frontend] [go]
-[incident] [marketing] [mobile] [postmortem] [process] [qa] [smoke-test] [ui]
+TAGS: [analytics] [backend] [choco] [copy] [css] [design] [docs]
+[frontend] [go] [incident] [marketing] [mobile] [postmortem] [process]        ↓4
 CONFLICT 1 ⊘               TODO 4                     IN PROGRESS 1 3 ›
 ┏━━━━━━━━━━━━━━━━━━━━━━━━┓ ┏━━━━━━━━━━━━━━━━━━━━━━━━┓ ┏━━━━━━━━━━━━━━━━━━━━━━━━┓
 ┃resolve_merge_conflict_…┃ ┃test_frontend.md        ┃ ┃setup_backend.md        ┃
-┃                        ┃ ┃frontend, css, vanilla,…┃ ┃backend, go             ┃
-┗━━━━━━━━━━━━━━━━━━━━━━━━┛ ┗━━━━━━━━━━━━━━━━━━━━━━━━┛ ┗━━━━━━━━━━━━━━━━━━━━━━━━┛
+┃                        ┃ ┃Design Frontend         ┃ ┃Initialize Project      ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━┛ ┃frontend, css, vanilla,…┃ ┃backend, go             ┃
+                           ┗━━━━━━━━━━━━━━━━━━━━━━━━┛ ┗━━━━━━━━━━━━━━━━━━━━━━━━┛
                            ╭────────────────────────╮
                            │read_prd.md             │
+                           │Read PRD                │
                            │docs                    │
                            ╰────────────────────────╯
                            ╭────────────────────────╮
                            │wire_up_analytics_event…│
+                           │Wire Up Board Analytics…│
                            │analytics, backend      │
                            ╰────────────────────────╯
-                           ╭────────────────────────╮
-                           │polish_mobile_nav_trans…│
-                           │design, mobile          │
-                           ╰────────────────────────╯
+                           ↓ 1 more
 
-h/l ←/→ section / chip • j/k ↓/↑ card / row / scroll • g/G first / last • ? help
+space grab · / search · enter preview · t tags · e edit · u undo · ? help

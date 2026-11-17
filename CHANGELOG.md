@@ -7,21 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-
-- Shared store extracted into `internal/board`; README and GoReleaser build
-  the whole package (`.`).
-- Renamed the pristine QA fixture folder to `test-work-items/`.
+## [0.4.1] - 2026-11-17
 
 ### Added
 
-- Task dependencies: an optional `depends_on` frontmatter list renders clickable dependency
-  badges, with warnings for missing targets and dependency cycles.
-- `mk tui` terminal board with filters, Markdown previews, and card actions: grab-and-move,
-  quick column/neighbour moves, tag editing, `$EDITOR` handoff, copy path (OSC 52 over SSH),
-  hash-guarded undo of TUI moves and tag edits, board/table views, live fuzzy
-  search combined with chips, mouse selection and scrolling (`-no-mouse`),
-  and generated mode-specific help.
+- TUI `A` archives cards into configurable `archive_dir` (default `archive`), with guarded undo. Archived dependencies remain known and display as archived
+- TUI `c` collapses board columns into persisted name/count strips. Navigation skips strips; quick moves and grab can still drop into them
+- TUI cards show the first Markdown H1 below the filename in both densities; the table adds a TITLE column. Search fuzzy-matches and highlights headings, ranking table results by the better filename or heading score. Task JSON exposes the optional `heading` field
+- TUI chip find (`/` or `ctrl+f` in filters), first/last chip navigation, page navigation, and mouse-wheel scrolling over each filter group
+- Command palette in the TUI (`:`): fuzzy-search current-mode and global actions from the shared help keymap, then press Enter to run one
+- Task dependencies: an optional `depends_on` frontmatter list renders clickable dependency badges, with warnings for missing targets and dependency cycles
+- Terminal board via `mk tui` with filters, Markdown previews, and card actions: grab-and-move, quick column/neighbour moves, tag editing, `$EDITOR` handoff, copy path (OSC 52 over SSH), hash-guarded undo of TUI moves and tag edits, board/table views, live fuzzy search combined with chips, mouse selection and scrolling (`-no-mouse`), and generated mode-specific help
+- Find within a `mk tui` preview (`ctrl+f` or `/`): live case-insensitive literal matches in the displayed body, all occurrences highlighted, Enter/Shift+Enter navigation with wraparound, and current/total or no-match feedback
+
+### Changed
+
+- TUI filter groups now scroll by wrapped lines, show hidden-chip counts, remember focus per group, and give the focused group more space. Selected chips are pinned first while keyboard focus stays on the toggled value
+- TUI keys: `p` replaces `ctrl+f` for filter-panel collapse; `ctrl+f` opens board/table search or preview find. Preview `u` now undoes actions; plain `d`, `u`, and `f` no longer scroll previews or overlays. Use `ctrl+d/u` for half pages and Space/PageDown or b/PageUp for full pages
+- The TUI hint line prioritises actions per mode and expands with terminal width
+- Shared store extracted into `internal/board`; README and GoReleaser build the whole package (`.`)
+- Renamed the pristine QA fixture folder to `test-work-items/`
+
+### Fixed
+
+- Corrected the J/K reorder label in the TUI help
 
 ## [0.4.0] - 2026-10-10
 

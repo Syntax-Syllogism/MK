@@ -2,8 +2,10 @@ package board
 
 import (
 	"encoding/json"
+	"errors"
 	"io/ioutil"
 	"log"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -18,18 +20,21 @@ type Options struct {
 	Logf func(format string, args ...any)
 }
 type Snapshot struct {
-	Columns []string
-	Tasks   []Task
-	Dir     string
+	Archived map[string]bool
+	Columns  []string
+	Tasks    []Task
+	Dir      string
 }
 type Store struct {
 	dir  string
 	opts Options
 	mu   sync.RWMutex
 	// Serialize file reads/writes so a scan cannot replace a newer Apply result.
-	ioMu    sync.Mutex
-	tasks   []Task
-	columns []string
+	ioMu       sync.Mutex
+	tasks      []Task
+	columns    []string
+	archiveDir string
+	archived   map[string]bool
 }
 
 // Open creates the task directory, scans it, and bootstraps then loads its config.
@@ -51,6 +56,9 @@ func Open(dir string, opts Options) (*Store, error) {
 	if err := s.ReloadConfig(); err != nil {
 		s.logf("Config load error: %v", err)
 	}
+	if err := s.Scan(); err != nil {
+		s.logf("Archive scan error: %v", err)
+	}
 	return s, nil
 }
 func (s *Store) logf(format string, args ...any) {
@@ -67,7 +75,7 @@ func (s *Store) Snapshot() Snapshot {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	tasks := cloneTasks(s.tasks)
-	return Snapshot{Columns: append([]string(nil), s.columns...), Tasks: tasks, Dir: s.dir}
+	return Snapshot{Columns: append([]string(nil), s.columns...), Tasks: tasks, Dir: s.dir, Archived: maps.Clone(s.archived)}
 }
 func cloneTasks(tasks []Task) []Task {
 	if tasks == nil {
@@ -118,19 +126,21 @@ func (s *Store) Scan() error {
 		}
 	}
 
+	archived, archiveErr := s.scanArchived()
 	s.mu.Lock()
 	s.tasks = newTasks
+	s.archived = archived
 	s.mu.Unlock()
 
 	if s.opts.CachePath == "" {
-		return nil
+		return archiveErr
 	}
 	data, err := json.MarshalIndent(newTasks, "", "  ")
 	if err != nil {
-		return err
+		return errors.Join(archiveErr, err)
 	}
 	if err := os.MkdirAll(filepath.Dir(s.opts.CachePath), 0755); err != nil {
-		return err
+		return errors.Join(archiveErr, err)
 	}
-	return ioutil.WriteFile(s.opts.CachePath, data, 0644)
+	return errors.Join(archiveErr, ioutil.WriteFile(s.opts.CachePath, data, 0644))
 }

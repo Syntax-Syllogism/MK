@@ -10,7 +10,8 @@ import (
 )
 
 type BoardConfig struct {
-	Columns []string `yaml:"columns"`
+	Columns    []string `yaml:"columns"`
+	ArchiveDir string   `yaml:"archive_dir,omitempty"`
 }
 
 const ConfigFileName = ".kanban.yml"
@@ -57,6 +58,23 @@ func (s *Store) ReloadConfig() error {
 	var loaded BoardConfig
 	if err := yaml.Unmarshal(data, &loaded); err != nil {
 		return err
+	}
+	archive := loaded.ArchiveDir
+	if archive == "" {
+		archive = "archive"
+	}
+	valid := !filepath.IsAbs(archive) && filepath.Clean(archive) != "." && !strings.HasPrefix(filepath.Clean(archive), "..")
+	for _, part := range strings.Split(filepath.ToSlash(archive), "/") {
+		if part == ".." {
+			valid = false
+		}
+	}
+	if valid {
+		s.mu.Lock()
+		s.archiveDir = filepath.Clean(archive)
+		s.mu.Unlock()
+	} else {
+		s.logf("Config warning: invalid archive_dir %q; keeping current archive directory", archive)
 	}
 
 	var cols []string

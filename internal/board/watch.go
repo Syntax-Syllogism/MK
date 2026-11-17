@@ -62,14 +62,14 @@ func (s *Store) watchEvents(ctx context.Context, watcher *fsnotify.Watcher, onCh
 			tick = timer.C
 		case <-tick:
 			tick = nil
-			if scan {
-				if err := s.Scan(); err != nil {
-					s.logf("Scan error: %v", err)
-				}
-			}
 			if config {
 				if err := s.ReloadConfig(); err != nil {
 					s.logf("Config reload error: %v", err)
+				}
+			}
+			if scan || config {
+				if err := s.Scan(); err != nil {
+					s.logf("Scan error: %v", err)
 				}
 			}
 			scan, config = false, false
